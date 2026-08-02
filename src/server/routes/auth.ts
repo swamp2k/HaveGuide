@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { credentialsSchema } from '../../shared/schemas';
 import type { AppEnvironment } from '../types';
 import { clearSessionCookie, readSessionCookie, writeSessionCookie } from '../auth/cookies';
@@ -18,7 +18,7 @@ import { getClientIp, normalizeUsername, parseJson } from '../utils/request';
 
 export const authRoutes = new Hono<AppEnvironment>();
 
-async function issueSession(c: Parameters<typeof authRoutes.post>[1] extends never ? never : any, userId: string) {
+async function issueSession(c: Context<AppEnvironment>, userId: string): Promise<void> {
   const sessionDays = Math.min(Math.max(Number.parseInt(c.env.SESSION_DAYS || '30', 10), 1), 365);
   const token = randomToken();
   const tokenHash = await sha256(token);

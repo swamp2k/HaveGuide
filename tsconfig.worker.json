@@ -5,8 +5,7 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
     "lib": ["ES2023", "WebWorker"],
     "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "types": ["./worker-configuration.d.ts"]
+    "moduleResolution": "Bundler"
   },
   "include": ["src/server", "src/shared", "worker-configuration.d.ts"]
 }

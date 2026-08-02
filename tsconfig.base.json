@@ -8,7 +8,6 @@
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",

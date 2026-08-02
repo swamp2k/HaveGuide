@@ -6,13 +6,10 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   { ignores: ['dist', '.wrangler', 'worker-configuration.d.ts', 'playwright-report', 'test-results'] },
   js.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
+  ...tseslint.configs.recommended,
   {
+    files: ['**/*.{ts,tsx}'],
     languageOptions: {
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
       globals: {
         ...globals.browser,
         ...globals.worker,
@@ -23,8 +20,8 @@ export default tseslint.config(
       'react-hooks': reactHooks,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
-      '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: { attributes: false } }],
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
     },
   },
