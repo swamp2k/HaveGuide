@@ -32,7 +32,7 @@ export const polygonGeometrySchema = z
     }
   });
 
-export const geometrySchema = z.discriminatedUnion('type', [
+export const geometrySchema = z.union([
   pointGeometrySchema,
   lineStringGeometrySchema,
   polygonGeometrySchema,

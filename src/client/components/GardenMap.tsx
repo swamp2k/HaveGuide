@@ -75,11 +75,15 @@ function replacePosition(geometry: GardenGeometry, index: number, next: Position
   if (geometry.type === 'LineString') {
     return {
       type: 'LineString',
-      coordinates: geometry.coordinates.map((position, current) => (current === index ? next : position)),
+      coordinates: geometry.coordinates.map((position: Position, current: number) =>
+        current === index ? next : position,
+      ),
     };
   }
   const openRing = geometry.coordinates[0]?.slice(0, -1) ?? [];
-  const updated = openRing.map((position, current) => (current === index ? next : position));
+  const updated = openRing.map((position: Position, current: number) =>
+    current === index ? next : position,
+  );
   return { type: 'Polygon', coordinates: [closePolygon(updated)] };
 }
 
@@ -119,7 +123,6 @@ export function GardenMap({ garden, onGardenChanged }: GardenMapProps) {
       center: [garden.centerLng, garden.centerLat],
       zoom: 18,
       maxZoom: 22,
-      attributionControl: true,
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
@@ -178,7 +181,7 @@ export function GardenMap({ garden, onGardenChanged }: GardenMapProps) {
       map.remove();
       mapRef.current = null;
     };
-  }, [garden.centerLat, garden.centerLng, garden.features]);
+  }, [garden.centerLat, garden.centerLng]);
 
   useEffect(() => {
     const map = mapRef.current;
