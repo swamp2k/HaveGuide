@@ -2,10 +2,12 @@ import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import type { AppEnvironment } from './types';
 import { authRoutes } from './routes/auth';
+import { captureRoutes } from './routes/capture';
 import { designRoutes } from './routes/designs';
 import { gardenRoutes } from './routes/gardens';
 import { journeyRoutes } from './routes/journey';
 import { understandingRoutes } from './routes/understanding';
+import { mapRoutes } from './routes/map';
 import { mediaRoutes } from './routes/media';
 import { sameOriginWrites, securityHeaders } from './middleware/security';
 import { jsonError } from './utils/response';
@@ -21,6 +23,8 @@ app.route('/api/gardens', gardenRoutes);
 app.route('/api/gardens', understandingRoutes);
 app.route('/api/gardens', designRoutes);
 app.route('/api/gardens', journeyRoutes);
+app.route('/api/gardens', captureRoutes);
+app.route('/api/map', mapRoutes);
 app.route('/api/media', mediaRoutes);
 
 app.notFound((c) => {
