@@ -1,6 +1,5 @@
 import { DESIGN_GOAL_LABELS, FEATURE_TYPE_LABELS } from './constants';
 import type {
-  DesignBudget,
   DesignConstraints,
   DesignGoal,
   DesignInspiration,
@@ -13,7 +12,10 @@ import type {
   PlantCatalogEntry,
 } from './types';
 
-export type GeneratedDesignOption = Omit<DesignOption, 'id' | 'projectId' | 'createdAt' | 'selectedAt' | 'status'>;
+export type GeneratedDesignOption = Omit<
+  DesignOption,
+  'id' | 'projectId' | 'createdAt' | 'selectedAt' | 'status'
+>;
 
 interface DesignEngineInput {
   goal: DesignGoal;
@@ -29,7 +31,6 @@ interface SiteSignals {
   moisture: string[];
   soil: string[];
   slope: boolean;
-  notes: string[];
 }
 
 interface Strategy {
@@ -39,14 +40,33 @@ interface Strategy {
 }
 
 const STRATEGIES: Strategy[] = [
-  { key: 'robust', name: 'Rolig og robust', description: 'Få plantetyper, gentagelser og lavt løbende arbejde.' },
-  { key: 'wildlife', name: 'Blomstring og liv', description: 'Lang blomstring og højere værdi for havens insekter.' },
-  { key: 'structure', name: 'Struktur hele året', description: 'Tydelige former, højdeforskelle og mere vintersilhuet.' },
+  {
+    key: 'robust',
+    name: 'Rolig og robust',
+    description: 'Få plantetyper, gentagelser og lavt løbende arbejde.',
+  },
+  {
+    key: 'wildlife',
+    name: 'Blomstring og liv',
+    description: 'Lang blomstring og højere værdi for havens insekter.',
+  },
+  {
+    key: 'structure',
+    name: 'Struktur hele året',
+    description: 'Tydelige former, højdeforskelle og mere vintersilhuet.',
+  },
 ];
 
 const PALETTE: Record<string, string> = {
-  white: '#f6f3e8', yellow: '#e8c34a', orange: '#d9853b', pink: '#d98ca3', red: '#b9554c',
-  purple: '#75609b', blue: '#5e82a8', green: '#4f7454', brown: '#806348',
+  white: '#f6f3e8',
+  yellow: '#e8c34a',
+  orange: '#d9853b',
+  pink: '#d98ca3',
+  red: '#b9554c',
+  purple: '#75609b',
+  blue: '#5e82a8',
+  green: '#4f7454',
+  brown: '#806348',
 };
 
 function includesAny(value: string, terms: string[]): boolean {
@@ -54,11 +74,19 @@ function includesAny(value: string, terms: string[]): boolean {
   return terms.some((term) => normalized.includes(term));
 }
 
-function siteSignals(assessments: DesignEngineInput['assessments'], targetFeatureType: FeatureType | null): SiteSignals {
-  const signals: SiteSignals = { sun: [], moisture: [], soil: [], slope: targetFeatureType === 'slope', notes: [] };
+function readSiteSignals(
+  assessments: DesignEngineInput['assessments'],
+  targetFeatureType: FeatureType | null,
+): SiteSignals {
+  const signals: SiteSignals = {
+    sun: [],
+    moisture: [],
+    soil: [],
+    slope: targetFeatureType === 'slope',
+  };
+
   for (const assessment of assessments) {
     const text = `${assessment.value} ${assessment.notes}`.trim();
-    signals.notes.push(`${assessment.category}: ${assessment.value}`);
     if (assessment.category === 'sun') {
       if (includesAny(text, ['fuld sol', 'meget sol', 'sol fra', 'solrig'])) signals.sun.push('sun');
       if (includesAny(text, ['halvskygge', 'delvis skygge'])) signals.sun.push('part_shade');
@@ -75,21 +103,33 @@ function siteSignals(assessments: DesignEngineInput['assessments'], targetFeatur
       if (includesAny(text, ['kalk'])) signals.soil.push('chalk');
       if (includesAny(text, ['muld', 'loam', 'almindelig'])) signals.soil.push('loam');
     }
-    if (assessment.category === 'slope' && !includesAny(text, ['flad', 'ingen hældning'])) signals.slope = true;
+    if (assessment.category === 'slope' && !includesAny(text, ['flad', 'ingen hældning'])) {
+      signals.slope = true;
+    }
   }
+
   return {
-    ...signals,
     sun: [...new Set(signals.sun)],
     moisture: [...new Set(signals.moisture)],
     soil: [...new Set(signals.soil)],
+    slope: signals.slope,
   };
 }
 
 function isExcluded(entry: PlantCatalogEntry, constraints: DesignConstraints): boolean {
   if (constraints.maxHeightCm !== null && entry.heightCm > constraints.maxHeightCm) return true;
-  if ((constraints.avoidPotentiallyHarmful || constraints.childrenUseGarden || constraints.petsUseGarden) && entry.safety === 'avoid') return true;
-  if (constraints.effort === 'low' && entry.maintenanceLevel > 3) return true;
-  return false;
+  if (
+    (constraints.avoidPotentiallyHarmful || constraints.childrenUseGarden || constraints.petsUseGarden) &&
+    entry.safety === 'avoid'
+  ) {
+    return true;
+  }
+  return constraints.effort === 'low' && entry.maintenanceLevel > 3;
+}
+
+function overlapScore(expected: string[], actual: string[], match: number, mismatch: number): number {
+  if (!expected.length) return 0;
+  return actual.some((value) => expected.includes(value)) ? match : mismatch;
 }
 
 function scoreEntry(
@@ -100,10 +140,11 @@ function scoreEntry(
   signals: SiteSignals,
 ): number {
   let score = 10;
-  if (signals.sun.length) score += entry.sun.some((value) => signals.sun.includes(value)) ? 4 : -4;
-  if (signals.moisture.length) score += entry.moisture.some((value) => signals.moisture.includes(value)) ? 3 : -3;
-  if (signals.soil.length) score += entry.soil.some((value) => signals.soil.includes(value)) ? 2 : -2;
-  if (constraints.colors.length) score += entry.colors.some((value) => constraints.colors.includes(value)) ? 3 : -2;
+  score += overlapScore(signals.sun, entry.sun, 4, -4);
+  score += overlapScore(signals.moisture, entry.moisture, 3, -3);
+  score += overlapScore(signals.soil, entry.soil, 2, -2);
+  score += overlapScore(constraints.colors, entry.colors, 3, -2);
+
   if (constraints.winterInterest && entry.evergreen) score += 4;
   if (entry.safety === 'low_risk') score += constraints.childrenUseGarden || constraints.petsUseGarden ? 3 : 1;
   if (entry.safety === 'review' && (constraints.childrenUseGarden || constraints.petsUseGarden)) score -= 1;
@@ -113,17 +154,28 @@ function scoreEntry(
   if (goal === 'privacy') score += entry.privacySuitable ? 7 : -2;
   if (goal === 'flowers') score += Math.min(entry.floweringMonths.length, 5);
   if (goal === 'biodiversity') score += entry.biodiversityScore * 2;
-  if (goal === 'seating') score += entry.maintenanceLevel <= 2 ? 3 : 0;
+  if (goal === 'seating' && entry.maintenanceLevel <= 2) score += 3;
   if (goal === 'edible') score += entry.scientificName === 'Corylus avellana' ? 8 : -1;
 
-  if (strategy === 'robust') score += (6 - entry.maintenanceLevel) * 2 + (entry.category === 'groundcover' ? 2 : 0);
-  if (strategy === 'wildlife') score += entry.biodiversityScore * 2 + Math.min(entry.floweringMonths.length, 4);
-  if (strategy === 'structure') score += (entry.evergreen ? 4 : 0) + (entry.privacySuitable ? 3 : 0) + Math.min(entry.heightCm / 80, 4);
+  if (strategy === 'robust') {
+    score += (6 - entry.maintenanceLevel) * 2;
+    if (entry.category === 'groundcover') score += 2;
+  }
+  if (strategy === 'wildlife') {
+    score += entry.biodiversityScore * 2 + Math.min(entry.floweringMonths.length, 4);
+  }
+  if (strategy === 'structure') {
+    if (entry.evergreen) score += 4;
+    if (entry.privacySuitable) score += 3;
+    score += Math.min(entry.heightCm / 80, 4);
+  }
   return score;
 }
 
 function quantityHint(entry: PlantCatalogEntry): string {
-  if (entry.category === 'groundcover') return `ca. 5–8 pr. m² med omkring ${entry.spreadCm} cm bredde som pejlemærke`;
+  if (entry.category === 'groundcover') {
+    return `ca. 5–8 pr. m² med omkring ${entry.spreadCm} cm bredde som pejlemærke`;
+  }
   if (entry.category === 'hedge') return 'mål længden og fastlæg planteafstand ud fra den konkrete sort';
   if (entry.category === 'shrub') return '1–3 grupperede buske afhængigt af områdets størrelse';
   if (entry.category === 'grass') return '3–7 planter i gentagne grupper';
@@ -131,47 +183,97 @@ function quantityHint(entry: PlantCatalogEntry): string {
   return '3–7 planter i gentagne grupper';
 }
 
-function reason(entry: PlantCatalogEntry, goal: DesignGoal, signals: SiteSignals): string {
+function recommendationReason(entry: PlantCatalogEntry, goal: DesignGoal, signals: SiteSignals): string {
   const reasons: string[] = [];
-  if (goal === 'low_maintenance' && entry.maintenanceLevel <= 2) reasons.push('lavt forventet vedligeholdelsesniveau');
-  if ((goal === 'slope' || signals.slope) && entry.slopeSuitable) reasons.push('egnet som del af en plantedækket skrænt');
+  if (goal === 'low_maintenance' && entry.maintenanceLevel <= 2) {
+    reasons.push('lavt forventet vedligeholdelsesniveau');
+  }
+  if ((goal === 'slope' || signals.slope) && entry.slopeSuitable) {
+    reasons.push('egnet som del af en plantedækket skrænt');
+  }
   if (goal === 'privacy' && entry.privacySuitable) reasons.push('kan bidrage med højde eller afskærmning');
-  if (goal === 'biodiversity' || goal === 'flowers') reasons.push('blomstring og værdi for havens insekter');
+  if (goal === 'biodiversity' || goal === 'flowers') {
+    reasons.push('blomstring og værdi for havens insekter');
+  }
   if (entry.evergreen) reasons.push('grøn struktur om vinteren');
-  if (!reasons.length) reasons.push('passer rimeligt til de registrerede forhold og planens struktur');
-  return reasons.join(', ');
+  return reasons.length
+    ? reasons.join(', ')
+    : 'passer rimeligt til de registrerede forhold og planens struktur';
 }
 
-function workItems(goal: DesignGoal, strategy: Strategy, signals: SiteSignals): DesignWorkItem[] {
-  const items: DesignWorkItem[] = [
-    { order: 1, title: 'Mål området op', description: 'Bekræft areal, adgangsvej og hvad der skal bevares, før der bestilles planter.', effort: 'small' },
-    { order: 2, title: 'Forbered jorden', description: 'Fjern flerårigt ukrudt og forbedr kun jorden, hvor de valgte planter kræver det.', effort: 'medium' },
+function buildWorkItems(goal: DesignGoal, strategy: Strategy, signals: SiteSignals): DesignWorkItem[] {
+  const items: Omit<DesignWorkItem, 'order'>[] = [
+    {
+      title: 'Mål området op',
+      description: 'Bekræft areal, adgangsvej og hvad der skal bevares, før der bestilles planter.',
+      effort: 'small',
+    },
+    {
+      title: 'Forbered jorden',
+      description: 'Fjern flerårigt ukrudt og forbedr kun jorden, hvor de valgte planter kræver det.',
+      effort: 'medium',
+    },
   ];
   if (signals.slope || goal === 'slope') {
-    items.push({ order: 3, title: 'Stabilisér skrænten først', description: 'Arbejd i mindre felter, behold eksisterende rødder hvor muligt, og brug midlertidig erosionssikring på stejle partier.', effort: 'large' });
+    items.push({
+      title: 'Stabilisér skrænten først',
+      description: 'Arbejd i mindre felter, behold eksisterende rødder hvor muligt, og brug midlertidig erosionssikring på stejle partier.',
+      effort: 'large',
+    });
   }
   if (goal === 'seating') {
-    items.push({ order: items.length + 1, title: 'Fastlæg opholdsfladen', description: 'Placér siddeplads og ganglinjer før beplantningen, så planterne ikke senere skal flyttes.', effort: 'large' });
+    items.push({
+      title: 'Fastlæg opholdsfladen',
+      description: 'Placér siddeplads og ganglinjer før beplantningen, så planterne ikke senere skal flyttes.',
+      effort: 'large',
+    });
   }
   items.push(
-    { order: items.length + 1, title: `Plant efter strategien “${strategy.name}”`, description: 'Gentag få plantegrupper frem for at placere hver plante som et enkeltstående element.', effort: 'medium' },
-    { order: items.length + 2, title: 'Dæk jorden og vand ind', description: 'Brug et passende dæklag og hold øje med udtørring i etableringsperioden.', effort: 'small' },
+    {
+      title: `Plant efter strategien “${strategy.name}”`,
+      description: 'Gentag få plantegrupper frem for at placere hver plante som et enkeltstående element.',
+      effort: 'medium',
+    },
+    {
+      title: 'Dæk jorden og vand ind',
+      description: 'Brug et passende dæklag og hold øje med udtørring i etableringsperioden.',
+      effort: 'small',
+    },
   );
   return items.map((item, index) => ({ ...item, order: index + 1 }));
 }
 
-function budgetBand(constraints: DesignConstraints, selected: PlantCatalogEntry[], goal: DesignGoal): 'low' | 'medium' | 'high' {
+function chooseBudgetBand(
+  constraints: DesignConstraints,
+  selected: PlantCatalogEntry[],
+  goal: DesignGoal,
+): 'low' | 'medium' | 'high' {
   if (constraints.budget !== 'flexible') return constraints.budget;
-  if (goal === 'seating' || selected.some((entry) => entry.category === 'hedge' || entry.heightCm > 200)) return 'high';
-  if (selected.some((entry) => entry.category === 'shrub' || entry.category === 'grass')) return 'medium';
-  return 'low';
+  if (goal === 'seating' || selected.some((entry) => entry.category === 'hedge' || entry.heightCm > 200)) {
+    return 'high';
+  }
+  return selected.some((entry) => entry.category === 'shrub' || entry.category === 'grass')
+    ? 'medium'
+    : 'low';
 }
 
-function visualFor(selected: PlantCatalogEntry[], constraints: DesignConstraints, inspiration: DesignEngineInput['inspiration']): DesignVisual {
-  const requestedColors = constraints.colors.length ? constraints.colors : selected.flatMap((entry) => entry.colors).slice(0, 4);
-  const palette = [...new Set(requestedColors)].slice(0, 5).map((color) => PALETTE[color] ?? PALETTE.green);
+function buildVisual(
+  selected: PlantCatalogEntry[],
+  constraints: DesignConstraints,
+  inspiration: DesignEngineInput['inspiration'],
+): DesignVisual {
+  const requestedColors = constraints.colors.length
+    ? constraints.colors
+    : selected.flatMap((entry) => entry.colors).slice(0, 4);
+  const palette = [...new Set(requestedColors)]
+    .slice(0, 5)
+    .map((color) => PALETTE[color] ?? PALETTE.green ?? '#4f7454');
   const positions = [
-    { x: 18, y: 72 }, { x: 38, y: 58 }, { x: 58, y: 74 }, { x: 76, y: 48 }, { x: 86, y: 70 },
+    { x: 18, y: 72 },
+    { x: 38, y: 58 },
+    { x: 58, y: 74 },
+    { x: 76, y: 48 },
+    { x: 86, y: 70 },
   ];
   const layers = selected.slice(0, positions.length).map((entry, index) => {
     const position = positions[index] ?? { x: 50, y: 60 };
@@ -186,87 +288,123 @@ function visualFor(selected: PlantCatalogEntry[], constraints: DesignConstraints
   });
   return {
     backgroundMediaId: inspiration?.mediaId ?? null,
-    palette: palette.length ? palette : [PALETTE.green, '#dcebd8', '#f6f3e8'],
+    palette: palette.length ? palette : ['#4f7454', '#dcebd8', '#f6f3e8'],
     layers,
     disclaimer: 'Konceptvisning – placering, antal og plantesort skal bekræftes på stedet før køb.',
   };
 }
 
-function ruleTrace(input: DesignEngineInput, signals: SiteSignals, selected: PlantCatalogEntry[]): string[] {
+function buildRuleTrace(
+  input: DesignEngineInput,
+  signals: SiteSignals,
+  selected: PlantCatalogEntry[],
+): string[] {
   const trace = [
     `Mål: ${DESIGN_GOAL_LABELS[input.goal]}.`,
-    input.targetFeatureType ? `Målområdet er registreret som ${FEATURE_TYPE_LABELS[input.targetFeatureType].toLocaleLowerCase('da')}.` : 'Planen gælder haven som helhed.',
-    input.constraints.effort === 'low' ? 'Planter med højt vedligeholdelsesniveau er fravalgt.' : 'Vedligeholdelsesniveauet må variere.',
+    input.targetFeatureType
+      ? `Målområdet er registreret som ${FEATURE_TYPE_LABELS[input.targetFeatureType].toLocaleLowerCase('da')}.`
+      : 'Planen gælder haven som helhed.',
+    input.constraints.effort === 'low'
+      ? 'Planter med højt vedligeholdelsesniveau er fravalgt.'
+      : 'Vedligeholdelsesniveauet må variere.',
   ];
-  if (input.constraints.maxHeightCm !== null) trace.push(`Planter over ${input.constraints.maxHeightCm} cm er fravalgt.`);
-  if (input.constraints.avoidPotentiallyHarmful || input.constraints.childrenUseGarden || input.constraints.petsUseGarden) {
+  if (input.constraints.maxHeightCm !== null) {
+    trace.push(`Planter over ${input.constraints.maxHeightCm} cm er fravalgt.`);
+  }
+  if (
+    input.constraints.avoidPotentiallyHarmful ||
+    input.constraints.childrenUseGarden ||
+    input.constraints.petsUseGarden
+  ) {
     trace.push('Planter markeret “undgå” i startkataloget er fravalgt; “kontrollér” er stadig ikke en sikkerhedsgaranti.');
   }
-  if (signals.sun.length || signals.moisture.length || signals.soil.length) trace.push('Registrerede sol-, fugt- og jordforhold indgår i rangeringen.');
-  else trace.push('Der mangler præcise vækstforhold; anbefalingerne er derfor mere forsigtige.');
-  if (input.inspiration) trace.push(`Inspirationen “${input.inspiration.title}” påvirker stil og ønskede elementer, ikke vækstkrav.`);
-  if (input.goal === 'edible') trace.push('Spiselighed er ikke automatisk godkendt; korrekt plante, sort og anvendelse skal verificeres før indtagelse.');
-  if (selected.some((entry) => entry.safety === 'review')) trace.push('Mindst én anbefaling kræver særskilt sikkerhedskontrol for børn eller dyr.');
+  trace.push(
+    signals.sun.length || signals.moisture.length || signals.soil.length
+      ? 'Registrerede sol-, fugt- og jordforhold indgår i rangeringen.'
+      : 'Der mangler præcise vækstforhold; anbefalingerne er derfor mere forsigtige.',
+  );
+  if (input.inspiration) {
+    trace.push(`Inspirationen “${input.inspiration.title}” påvirker stil og ønskede elementer, ikke vækstkrav.`);
+  }
+  if (input.goal === 'edible') {
+    trace.push('Spiselighed er ikke automatisk godkendt; korrekt plante, sort og anvendelse skal verificeres før indtagelse.');
+  }
+  if (selected.some((entry) => entry.safety === 'review')) {
+    trace.push('Mindst én anbefaling kræver særskilt sikkerhedskontrol for børn eller dyr.');
+  }
   return trace;
 }
 
-function titleFor(goal: DesignGoal, strategy: Strategy): string {
+function optionTitle(goal: DesignGoal, strategy: Strategy): string {
   const prefixes: Record<DesignGoal, string> = {
-    low_maintenance: 'Den nemme have', slope: 'Den plantede skrænt', privacy: 'Det grønne rum', flowers: 'Blomsterforløbet',
-    biodiversity: 'Den levende have', seating: 'Ophold mellem planter', edible: 'Den nyttige have', other: 'Den tilpassede have',
+    low_maintenance: 'Den nemme have',
+    slope: 'Den plantede skrænt',
+    privacy: 'Det grønne rum',
+    flowers: 'Blomsterforløbet',
+    biodiversity: 'Den levende have',
+    seating: 'Ophold mellem planter',
+    edible: 'Den nyttige have',
+    other: 'Den tilpassede have',
   };
   return `${prefixes[goal]} – ${strategy.name.toLocaleLowerCase('da')}`;
 }
 
 export function generateDesignOptions(input: DesignEngineInput): GeneratedDesignOption[] {
-  const signals = siteSignals(input.assessments, input.targetFeatureType);
+  const signals = readSiteSignals(input.assessments, input.targetFeatureType);
   const eligible = input.catalog.filter((entry) => !isExcluded(entry, input.constraints));
   const source = eligible.length ? eligible : input.catalog.filter((entry) => entry.safety !== 'avoid');
 
   return STRATEGIES.map((strategy, strategyIndex) => {
     const ranked = source
-      .map((entry) => ({ entry, score: scoreEntry(entry, input.goal, strategy.key, input.constraints, signals) }))
+      .map((entry) => ({
+        entry,
+        score: scoreEntry(entry, input.goal, strategy.key, input.constraints, signals),
+      }))
       .sort((a, b) => b.score - a.score || a.entry.commonName.localeCompare(b.entry.commonName, 'da'));
-    const selected = ranked.slice(strategyIndex, strategyIndex + 5).map((item) => item.entry);
-    if (selected.length < 4) {
-      for (const item of ranked) {
-        if (!selected.some((entry) => entry.id === item.entry.id)) selected.push(item.entry);
-        if (selected.length >= 5) break;
-      }
+
+    const selected = ranked.slice(strategyIndex, strategyIndex + 5).map(({ entry }) => entry);
+    for (const { entry } of ranked) {
+      if (selected.length >= 5) break;
+      if (!selected.some((candidate) => candidate.id === entry.id)) selected.push(entry);
     }
+
     const plants: DesignPlantRecommendation[] = selected.map((entry) => ({
       catalogId: entry.id,
       commonName: entry.commonName,
       scientificName: entry.scientificName,
       quantityHint: quantityHint(entry),
-      reason: reason(entry, input.goal, signals),
+      reason: recommendationReason(entry, input.goal, signals),
       safety: entry.safety,
       safetyNote: entry.safetyNote,
       sourceLabel: entry.sourceLabel,
       sourceUrl: entry.sourceUrl,
     }));
-    const maintenance = selected.length
+    const maintenanceScore = selected.length
       ? Math.max(1, Math.min(5, Math.round(selected.reduce((sum, entry) => sum + entry.maintenanceLevel, 0) / selected.length)))
       : 3;
-    const biodiversity = selected.length
+    const biodiversityScore = selected.length
       ? Math.max(1, Math.min(5, Math.round(selected.reduce((sum, entry) => sum + entry.biodiversityScore, 0) / selected.length)))
       : 1;
+
     return {
       position: strategyIndex + 1,
-      name: titleFor(input.goal, strategy),
+      name: optionTitle(input.goal, strategy),
       strategy: strategy.description,
       summary: `${DESIGN_GOAL_LABELS[input.goal]} løses med ${selected.length} hovedplanter og en trinvis arbejdsrækkefølge.`,
-      maintenanceScore: maintenance,
-      budgetBand: budgetBand(input.constraints, selected, input.goal),
-      biodiversityScore: biodiversity,
+      maintenanceScore,
+      budgetBand: chooseBudgetBand(input.constraints, selected, input.goal),
+      biodiversityScore,
       plants,
-      workItems: workItems(input.goal, strategy, signals),
-      ruleTrace: ruleTrace(input, signals, selected),
-      visual: visualFor(selected, input.constraints, input.inspiration),
+      workItems: buildWorkItems(input.goal, strategy, signals),
+      ruleTrace: buildRuleTrace(input, signals, selected),
+      visual: buildVisual(selected, input.constraints, input.inspiration),
     };
   });
 }
 
-export function replaceVisualBackground(visual: DesignVisual, backgroundMediaId: string | null): DesignVisual {
+export function replaceVisualBackground(
+  visual: DesignVisual,
+  backgroundMediaId: string | null,
+): DesignVisual {
   return { ...visual, backgroundMediaId };
 }
