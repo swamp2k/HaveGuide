@@ -10,11 +10,9 @@ import type {
 import { ApiError } from './api';
 
 async function request(path: string, init?: RequestInit): Promise<{ journey: GardenJourney }> {
-  const response = await fetch(path, {
-    ...init,
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
-  });
+  const headers = new Headers(init?.headers);
+  if (init?.body) headers.set('Content-Type', 'application/json');
+  const response = await fetch(path, { ...init, credentials: 'same-origin', headers });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: 'Forespørgslen mislykkedes.' })) as { error: string; code?: string };
     throw new ApiError(body.error, response.status, body.code);
