@@ -49,6 +49,13 @@ export async function findUserByNormalizedUsername(
   );
 }
 
+export async function updatePasswordHash(db: D1Database, userId: string, passwordHash: string): Promise<void> {
+  await db
+    .prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?')
+    .bind(passwordHash, nowIso(), userId)
+    .run();
+}
+
 export async function findUserById(db: D1Database, id: string): Promise<AuthUser | null> {
   return (
     (await db
