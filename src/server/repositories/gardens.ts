@@ -155,8 +155,9 @@ export async function updateGarden(
 export async function gardenBelongsToUser(
   db: D1Database,
   userId: string,
-  gardenId: string,
+  gardenId: string | undefined,
 ): Promise<boolean> {
+  if (!gardenId) return false;
   const row = await db
     .prepare('SELECT 1 AS found FROM gardens WHERE id = ? AND user_id = ? AND archived_at IS NULL LIMIT 1')
     .bind(gardenId, userId)
