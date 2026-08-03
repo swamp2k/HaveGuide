@@ -1,0 +1,27 @@
+.journey-page { max-width: 860px; }
+.journey-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; margin: 1rem 0; }
+.journey-summary span { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: .75rem; font-size: .82rem; }
+.journey-summary strong { display: block; color: var(--green-900); font-size: 1.15rem; margin-bottom: .2rem; }
+.journey-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: .45rem; margin: 1rem 0; }
+.journey-tabs button { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); min-height: 44px; font-weight: 700; }
+.journey-tabs button.active { background: var(--green-100); color: var(--green-900); border-color: var(--green-700); }
+.journey-section { display: grid; gap: 1rem; }
+.journey-quick-form { display: grid; grid-template-columns: 2fr 1fr auto; gap: .75rem; align-items: end; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 1rem; }
+.journey-quick-form label { display: grid; gap: .35rem; font-weight: 700; }
+.journey-list { display: grid; gap: .65rem; }
+.journey-row, .journey-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: .8rem; }
+.journey-row { display: flex; gap: .75rem; align-items: center; }
+.journey-row input { width: 22px; height: 22px; min-height: 0; }
+.journey-row span { display: grid; gap: .2rem; }
+.journey-row small, .journey-card small { color: var(--text-muted); }
+.journey-list.done { opacity: .72; margin-top: .75rem; }
+.journey-card h3 { margin: .2rem 0 .4rem; }
+.shopping-card { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.shopping-card p { margin: .25rem 0 0; color: var(--text-muted); }
+.journey-export { margin-top: 2rem; padding-top: 1.4rem; border-top: 1px solid var(--border); }
+.export-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+@media (max-width: 650px) {
+  .journey-summary { grid-template-columns: 1fr 1fr; }
+  .journey-quick-form { grid-template-columns: 1fr; }
+  .shopping-card { align-items: flex-start; flex-direction: column; }
+}
