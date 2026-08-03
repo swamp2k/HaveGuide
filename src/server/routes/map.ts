@@ -44,9 +44,7 @@ mapRoutes.get('/orthophoto/:z/:x/:y', async (c) => {
   upstream.searchParams.set('TILECOL', x);
   upstream.searchParams.set('Layer', 'orto_foraar_webm');
 
-  const response = await fetch(upstream, {
-    headers: { Accept: 'image/jpeg' },
-  });
+  const response = await fetch(upstream, { headers: { Accept: 'image/jpeg' } });
   if (!response.ok || !response.body) {
     console.warn(JSON.stringify({
       level: 'warn',
@@ -61,7 +59,7 @@ mapRoutes.get('/orthophoto/:z/:x/:y', async (c) => {
 
   const headers = new Headers();
   headers.set('Content-Type', response.headers.get('Content-Type') ?? 'image/jpeg');
-  headers.set('Cache-Control', 'private, max-age=86400');
+  headers.set('Cache-Control', 'public, max-age=86400');
   headers.set('X-Content-Type-Options', 'nosniff');
   const tile = new Response(response.body, { status: 200, headers });
   c.executionCtx.waitUntil(cache.put(cacheKey, tile.clone()));
