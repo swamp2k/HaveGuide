@@ -1,0 +1,123 @@
+.aerial-editor-launch {
+  position: absolute;
+  z-index: 18;
+  top: .75rem;
+  left: .75rem;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: .65rem .9rem;
+  background: rgb(255 255 255 / 96%);
+  color: var(--green-900);
+  font-weight: 800;
+  box-shadow: var(--shadow);
+}
+
+.aerial-editor {
+  position: fixed;
+  z-index: 2100;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #17241b;
+}
+
+.aerial-editor-header {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: max(.75rem, env(safe-area-inset-top)) .85rem .75rem;
+  background: rgb(255 255 255 / 97%);
+  border-bottom: 1px solid var(--border);
+}
+
+.aerial-editor-header .eyebrow { margin-bottom: .2rem; }
+.aerial-editor-header strong { display: block; font-size: 1.05rem; }
+.aerial-editor-header > button {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--green-900);
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.aerial-editor-map { min-height: 0; }
+
+.aerial-editor-layer-toggle {
+  position: absolute;
+  z-index: 6;
+  top: calc(max(.75rem, env(safe-area-inset-top)) + 64px);
+  left: .75rem;
+  display: inline-flex;
+  gap: .2rem;
+  padding: .25rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 14%);
+}
+
+.aerial-editor-layer-toggle button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  padding: .45rem .7rem;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 750;
+}
+
+.aerial-editor-layer-toggle button.active {
+  background: var(--green-100);
+  color: var(--green-900);
+}
+
+.aerial-editor-panel {
+  position: relative;
+  z-index: 5;
+  padding: .75rem .75rem max(.75rem, env(safe-area-inset-bottom));
+  background: rgb(255 255 255 / 98%);
+  border-top: 1px solid var(--border);
+}
+
+.aerial-editor-panel .status-message { margin: 0 0 .65rem; }
+.aerial-editor-panel .field-help { margin: 0 0 .65rem; }
+.aerial-editor-controls,
+.aerial-save-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: .6rem;
+}
+
+.aerial-editor-controls label,
+.aerial-save-form label {
+  display: grid;
+  gap: .35rem;
+  font-weight: 700;
+}
+
+.aerial-drawing-actions {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  flex-wrap: wrap;
+}
+
+.aerial-drawing-actions strong { margin-right: auto; }
+
+@media (max-width: 620px) {
+  .aerial-editor-launch { top: .55rem; left: .55rem; font-size: .82rem; }
+  .aerial-editor-controls,
+  .aerial-save-form { grid-template-columns: 1fr 1fr; }
+  .aerial-editor-controls .primary-button { grid-column: 1 / -1; }
+  .aerial-save-form label { grid-column: 1 / -1; }
+  .aerial-drawing-actions > * { flex: 1; }
+  .aerial-drawing-actions strong { flex-basis: 100%; }
+}
