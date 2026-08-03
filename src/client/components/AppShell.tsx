@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Garden, GardenDetail, UserSummary } from '../../shared/types';
+import '../design.css';
 import { DesignPage } from './DesignPage';
 import { GardenMap } from './GardenMap';
 import { UnderstandingPage } from './UnderstandingPage';
