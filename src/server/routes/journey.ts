@@ -7,6 +7,7 @@ import {
   updateTaskSchema,
 } from '../../shared/journey-schemas';
 import { requireAuth } from '../middleware/auth';
+import { getCaptureWorkspace } from '../repositories/capture';
 import { gardenBelongsToUser } from '../repositories/gardens';
 import {
   createChange,
@@ -81,11 +82,20 @@ journeyRoutes.patch('/:gardenId/shopping/:itemId', async (c) => {
 journeyRoutes.get('/:gardenId/export', async (c) => {
   const gardenId = c.req.param('gardenId');
   if (!gardenId || !(await requireGarden(c, gardenId))) return jsonError(c, 404, 'Haven blev ikke fundet.', 'GARDEN_NOT_FOUND');
-  const [garden, journey] = await Promise.all([
+  const [garden, journey, capture] = await Promise.all([
     c.env.DB.prepare('SELECT id,name,address,notes,center_lat,center_lng,created_at,updated_at FROM gardens WHERE id=?').bind(gardenId).first(),
     getJourney(c.env.DB, gardenId),
+    getCaptureWorkspace(c.env.DB, gardenId, Boolean(c.env.DATAFORDELER_API_KEY)),
   ]);
-  return new Response(JSON.stringify({ exportedAt: new Date().toISOString(), garden, journey }, null, 2), {
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="have-guide-${gardenId}.json"` },
+  return new Response(JSON.stringify({
+    exportedAt: new Date().toISOString(),
+    garden,
+    journey,
+    capture,
+  }, null, 2), {
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="have-guide-${gardenId}.json"`,
+    },
   });
 });
