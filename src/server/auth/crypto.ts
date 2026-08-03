@@ -1,6 +1,15 @@
+import {
+  PASSWORD_KDF,
+  PASSWORD_KDF_ITERATIONS,
+  PASSWORD_PROOF_BYTES,
+  PASSWORD_SALT_BYTES,
+  type PasswordChallenge,
+} from '../../shared/auth';
+
 const encoder = new TextEncoder();
-const PASSWORD_ITERATIONS = 600_000;
-const PASSWORD_KEY_BYTES = 32;
+const VERIFIER_ALGORITHM = 'client-pbkdf2-sha256';
+const LEGACY_ALGORITHM = 'pbkdf2-sha256';
+const VERIFIER_DOMAIN = 'have-guide-password-proof-v1|';
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -8,20 +17,13 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64ToBytes(value: string): Uint8Array {
-  const binary = atob(value);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-}
-
-async function derivePassword(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
-  const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
-  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: saltBuffer, iterations },
-    key,
-    PASSWORD_KEY_BYTES * 8,
-  );
-  return new Uint8Array(bits);
+function base64ToBytes(value: string): Uint8Array | null {
+  try {
+    const binary = atob(value);
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  } catch {
+    return null;
+  }
 }
 
 function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
@@ -33,20 +35,86 @@ function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
   return difference === 0;
 }
 
-export async function hashPassword(password: string): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const derived = await derivePassword(password, salt, PASSWORD_ITERATIONS);
-  return `pbkdf2-sha256$${PASSWORD_ITERATIONS}$${bytesToBase64(salt)}$${bytesToBase64(derived)}`;
+function parseEncodedPassword(encoded: string): {
+  algorithm: string;
+  iterations: number;
+  salt: string;
+  verifier: string;
+} | null {
+  const [algorithm, iterationsRaw, salt, verifier] = encoded.split('$');
+  const iterations = Number.parseInt(iterationsRaw ?? '', 10);
+  if (!algorithm || !salt || !verifier || !Number.isSafeInteger(iterations)) return null;
+  const saltBytes = base64ToBytes(salt);
+  const verifierBytes = base64ToBytes(verifier);
+  if (saltBytes?.byteLength !== PASSWORD_SALT_BYTES || verifierBytes?.byteLength !== PASSWORD_PROOF_BYTES) return null;
+  return { algorithm, iterations, salt, verifier };
 }
 
-export async function verifyPassword(password: string, encoded: string): Promise<boolean> {
-  const [algorithm, iterationsRaw, saltRaw, hashRaw] = encoded.split('$');
-  if (algorithm !== 'pbkdf2-sha256' || !iterationsRaw || !saltRaw || !hashRaw) return false;
-  const iterations = Number.parseInt(iterationsRaw, 10);
-  if (!Number.isSafeInteger(iterations) || iterations < 100_000) return false;
-  const expected = base64ToBytes(hashRaw);
-  const actual = await derivePassword(password, base64ToBytes(saltRaw), iterations);
-  return constantTimeEqual(actual, expected);
+async function proofDigest(proof: string): Promise<string> {
+  return sha256(`${VERIFIER_DOMAIN}${proof}`);
+}
+
+export function randomPasswordChallenge(): PasswordChallenge {
+  return {
+    algorithm: PASSWORD_KDF,
+    iterations: PASSWORD_KDF_ITERATIONS,
+    salt: bytesToBase64(crypto.getRandomValues(new Uint8Array(PASSWORD_SALT_BYTES))),
+  };
+}
+
+export function readPasswordChallenge(encoded: string): PasswordChallenge | null {
+  const parsed = parseEncodedPassword(encoded);
+  if (!parsed || ![VERIFIER_ALGORITHM, LEGACY_ALGORITHM].includes(parsed.algorithm)) return null;
+  if (parsed.iterations < 100_000 || parsed.iterations > 1_000_000) return null;
+  return { algorithm: PASSWORD_KDF, iterations: parsed.iterations, salt: parsed.salt };
+}
+
+export async function createPasswordVerifier(
+  proof: string,
+  salt: string,
+  iterations: number,
+): Promise<string> {
+  const proofBytes = base64ToBytes(proof);
+  const saltBytes = base64ToBytes(salt);
+  if (proofBytes?.byteLength !== PASSWORD_PROOF_BYTES) throw new Error('Invalid password proof.');
+  if (saltBytes?.byteLength !== PASSWORD_SALT_BYTES) throw new Error('Invalid password salt.');
+  if (iterations !== PASSWORD_KDF_ITERATIONS) throw new Error('Invalid password iteration count.');
+  return `${VERIFIER_ALGORITHM}$${iterations}$${salt}$${await proofDigest(proof)}`;
+}
+
+export async function verifyPasswordProof(
+  proof: string,
+  encoded: string,
+): Promise<{ valid: boolean; upgradedVerifier: string | null }> {
+  const parsed = parseEncodedPassword(encoded);
+  const proofBytes = base64ToBytes(proof);
+  if (!parsed || proofBytes?.byteLength !== PASSWORD_PROOF_BYTES) {
+    await proofDigest(proof);
+    return { valid: false, upgradedVerifier: null };
+  }
+
+  if (parsed.algorithm === VERIFIER_ALGORITHM) {
+    const actual = base64ToBytes(await proofDigest(proof));
+    const expected = base64ToBytes(parsed.verifier);
+    return {
+      valid: Boolean(actual && expected && constantTimeEqual(actual, expected)),
+      upgradedVerifier: null,
+    };
+  }
+
+  if (parsed.algorithm === LEGACY_ALGORITHM) {
+    const expected = base64ToBytes(parsed.verifier);
+    const valid = Boolean(expected && constantTimeEqual(proofBytes, expected));
+    return {
+      valid,
+      upgradedVerifier: valid
+        ? await createPasswordVerifier(proof, parsed.salt, parsed.iterations)
+        : null,
+    };
+  }
+
+  await proofDigest(proof);
+  return { valid: false, upgradedVerifier: null };
 }
 
 export function randomToken(byteLength = 32): string {

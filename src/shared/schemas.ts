@@ -11,12 +11,26 @@ import {
   PLANT_ORGANS,
   WALK_STEPS,
 } from './constants';
+import { PASSWORD_KDF_ITERATIONS } from './auth';
 import { geometrySchema } from './geojson';
 
 export const credentialsSchema = z.object({
   username: z.string().trim().min(3).max(64),
   password: z.string().min(10).max(256),
 });
+
+const usernameSchema = z.string().trim().min(3).max(64);
+const passwordProofSchema = z.string().regex(/^[A-Za-z0-9+/]{43}=$/, 'Ugyldigt passwordbevis.');
+const passwordSaltSchema = z.string().regex(/^[A-Za-z0-9+/]{22}==$/, 'Ugyldigt salt.');
+
+export const passwordChallengeRequestSchema = z.object({ username: usernameSchema });
+export const passwordSetupSchema = z.object({
+  username: usernameSchema,
+  proof: passwordProofSchema,
+  salt: passwordSaltSchema,
+  iterations: z.literal(PASSWORD_KDF_ITERATIONS),
+});
+export const passwordLoginSchema = z.object({ username: usernameSchema, proof: passwordProofSchema });
 
 export const createGardenSchema = z.object({
   name: z.string().trim().min(1).max(120),

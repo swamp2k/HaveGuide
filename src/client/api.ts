@@ -1,3 +1,4 @@
+import type { PasswordChallenge } from '../shared/auth';
 import type {
   ApiErrorBody,
   BootstrapResponse,
@@ -30,6 +31,7 @@ import type {
   updatePlantSchema,
   updateWalkSchema,
 } from '../shared/schemas';
+import { createPasswordChallenge, derivePasswordProof } from './auth/password';
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number, public readonly code?: string, public readonly details?: unknown) { super(message); }
@@ -46,10 +48,38 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+type Credentials = z.infer<typeof credentialsSchema>;
+
+async function setup(credentials: Credentials): Promise<{ user: UserSummary }> {
+  const challenge = createPasswordChallenge();
+  const proof = await derivePasswordProof(credentials.password, challenge);
+  return request<{ user: UserSummary }>('/api/auth/setup', {
+    method: 'POST',
+    body: JSON.stringify({
+      username: credentials.username,
+      proof,
+      salt: challenge.salt,
+      iterations: challenge.iterations,
+    }),
+  });
+}
+
+async function login(credentials: Credentials): Promise<{ user: UserSummary }> {
+  const response = await request<{ challenge: PasswordChallenge }>('/api/auth/challenge', {
+    method: 'POST',
+    body: JSON.stringify({ username: credentials.username }),
+  });
+  const proof = await derivePasswordProof(credentials.password, response.challenge);
+  return request<{ user: UserSummary }>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username: credentials.username, proof }),
+  });
+}
+
 export const api = {
   bootstrap: () => request<BootstrapResponse>('/api/auth/bootstrap'),
-  setup: (credentials: z.infer<typeof credentialsSchema>) => request<{ user: UserSummary }>('/api/auth/setup', { method: 'POST', body: JSON.stringify(credentials) }),
-  login: (credentials: z.infer<typeof credentialsSchema>) => request<{ user: UserSummary }>('/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+  setup,
+  login,
   logout: () => request<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
   listGardens: () => request<{ gardens: Garden[] }>('/api/gardens'),
   createGarden: (input: z.infer<typeof createGardenSchema>) => request<{ garden: Garden }>('/api/gardens', { method: 'POST', body: JSON.stringify(input) }),
