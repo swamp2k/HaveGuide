@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import type { AppEnvironment } from './types';
 import { authRoutes } from './routes/auth';
+import { designRoutes } from './routes/designs';
 import { gardenRoutes } from './routes/gardens';
 import { understandingRoutes } from './routes/understanding';
 import { mediaRoutes } from './routes/media';
@@ -17,6 +18,7 @@ app.get('/api/health', (c) => c.json({ ok: true, service: 'have-guide', environm
 app.route('/api/auth', authRoutes);
 app.route('/api/gardens', gardenRoutes);
 app.route('/api/gardens', understandingRoutes);
+app.route('/api/gardens', designRoutes);
 app.route('/api/media', mediaRoutes);
 
 app.notFound((c) => {
