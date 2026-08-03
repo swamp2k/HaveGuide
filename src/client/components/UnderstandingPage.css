@@ -1,0 +1,44 @@
+.bottom-nav { grid-template-columns: repeat(4, 1fr); }
+.understanding-page { display: grid; gap: 1rem; max-width: 980px; }
+.page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.completion-ring { flex: 0 0 86px; min-height: 86px; border-radius: 50%; display: grid; place-content: center; text-align: center; background: var(--green-100); border: 7px solid var(--surface); box-shadow: var(--shadow); }
+.completion-ring strong { font-size: 1.15rem; }
+.completion-ring span { color: var(--text-muted); font-size: .72rem; }
+.understanding-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 1rem; box-shadow: 0 4px 16px rgb(28 54 38 / 7%); }
+.card-heading, .plant-card-title, .duplicate-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.card-heading > span { font-size: 1.8rem; }
+.walk-card .primary-button { width: 100%; }
+.walk-progress { height: 8px; margin: 1rem 0; overflow: hidden; border-radius: 99px; background: var(--green-100); }
+.walk-progress span { display: block; height: 100%; border-radius: inherit; background: var(--green-700); }
+.filter-chips { display: flex; gap: .45rem; overflow-x: auto; padding-bottom: .65rem; }
+.filter-chips button { flex: 0 0 auto; min-height: 38px; padding: .45rem .75rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text-muted); }
+.filter-chips button.active { background: var(--green-100); border-color: #a9c7a7; color: var(--green-900); font-weight: 750; }
+.understanding-map { width: 100%; height: min(48dvh, 410px); min-height: 280px; border-radius: 14px; overflow: hidden; background: #dde4da; }
+.registration-grid { display: grid; gap: .8rem; }
+details.understanding-card { padding: 0; overflow: hidden; }
+details.understanding-card > summary { display: flex; align-items: center; gap: .7rem; min-height: 58px; padding: .9rem 1rem; cursor: pointer; list-style: none; }
+details.understanding-card > summary::-webkit-details-marker { display: none; }
+details.understanding-card > summary span { font-size: 1.3rem; }
+details.understanding-card[open] > summary { border-bottom: 1px solid var(--border); }
+details.understanding-card form { padding: 1rem; }
+.plant-list { display: grid; gap: .8rem; }
+.plant-card { border: 1px solid var(--border); border-radius: 15px; padding: .85rem; background: var(--surface-muted); }
+.plant-card-title strong, .plant-card-title em { display: block; }
+.plant-card-title em { margin-top: .15rem; color: var(--text-muted); font-size: .86rem; font-weight: 500; }
+.plant-card-title > span { color: var(--text-muted); font-size: .82rem; }
+.plant-photos { display: flex; gap: .45rem; margin: .75rem 0; overflow-x: auto; }
+.plant-photos img { flex: 0 0 92px; width: 92px; height: 72px; border-radius: 10px; object-fit: cover; background: #dce3d9; }
+.plant-actions { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; margin-top: .75rem; }
+.plant-actions .secondary-button { min-height: 40px; padding: .5rem .7rem; }
+.file-action { position: relative; display: inline-flex; align-items: center; min-height: 40px; padding: .5rem .7rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--green-900); font-weight: 700; cursor: pointer; }
+.file-action input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.suggestion-row { display: flex; justify-content: space-between; gap: .6rem; margin-top: .65rem; padding: .65rem; border-radius: 12px; background: #fff; border: 1px solid #bfd6be; }
+.suggestion-row strong, .suggestion-row span { display: block; }
+.suggestion-row span { color: var(--text-muted); font-size: .8rem; margin-top: .1rem; }
+.suggestion-row > div:last-child { display: flex; align-items: center; gap: .2rem; }
+.duplicate-row { align-items: center; padding: .7rem 0; border-top: 1px solid var(--border); }
+.duplicate-row .secondary-button { flex: 0 0 auto; min-height: 40px; }
+.checklist-card ul { margin: 0; padding-left: 1.2rem; color: var(--text-muted); }
+.checklist-card li + li { margin-top: .45rem; }
+@media (min-width: 760px) { .registration-grid { grid-template-columns: repeat(3, 1fr); align-items: start; } .understanding-page { padding-bottom: 7rem; } }
+@media (max-width: 480px) { .page-heading { align-items: center; } .page-heading .lead { display: none; } .completion-ring { flex-basis: 76px; min-height: 76px; } .suggestion-row { display: grid; } }
