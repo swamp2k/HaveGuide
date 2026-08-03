@@ -1,6 +1,7 @@
 import type {
   ApiErrorBody,
   BootstrapResponse,
+  DesignWorkspace,
   Garden,
   GardenAssessment,
   GardenDetail,
@@ -15,6 +16,7 @@ import type {
 import type { z } from 'zod';
 import type {
   createAssessmentSchema,
+  createDesignProjectSchema,
   createFeatureSchema,
   createGardenSchema,
   createObservationSchema,
@@ -22,6 +24,7 @@ import type {
   credentialsSchema,
   identifyPlantSchema,
   linkPlantMediaSchema,
+  updateDesignVisualSchema,
   updateFeatureSchema,
   updateGardenSchema,
   updatePlantSchema,
@@ -71,4 +74,9 @@ export const api = {
   decideSuggestion: (gardenId: string, suggestionId: string, action: 'accept' | 'reject') => request<{ ok: true }>(`/api/gardens/${gardenId}/suggestions/${suggestionId}/decision`, { method: 'POST', body: JSON.stringify({ action }) }),
   mergePlants: (gardenId: string, plantId: string, duplicatePlantId: string) => request<{ ok: true }>(`/api/gardens/${gardenId}/plants/${plantId}/merge`, { method: 'POST', body: JSON.stringify({ duplicatePlantId }) }),
   createAssessment: (gardenId: string, input: z.infer<typeof createAssessmentSchema>) => request<{ assessment: GardenAssessment }>(`/api/gardens/${gardenId}/assessments`, { method: 'POST', body: JSON.stringify(input) }),
+  getDesignWorkspace: (gardenId: string) => request<{ workspace: DesignWorkspace }>(`/api/gardens/${gardenId}/design`),
+  createDesignProject: (gardenId: string, input: z.infer<typeof createDesignProjectSchema>) => request<{ workspace: DesignWorkspace }>(`/api/gardens/${gardenId}/design/projects`, { method: 'POST', body: JSON.stringify(input) }),
+  selectDesignOption: (gardenId: string, projectId: string, optionId: string) => request<{ workspace: DesignWorkspace }>(`/api/gardens/${gardenId}/design/projects/${projectId}/select`, { method: 'POST', body: JSON.stringify({ optionId }) }),
+  updateDesignVisual: (gardenId: string, optionId: string, input: z.infer<typeof updateDesignVisualSchema>) => request<{ workspace: DesignWorkspace }>(`/api/gardens/${gardenId}/design/options/${optionId}/visual`, { method: 'PATCH', body: JSON.stringify(input) }),
+  archiveDesignProject: (gardenId: string, projectId: string) => request<{ workspace: DesignWorkspace }>(`/api/gardens/${gardenId}/design/projects/${projectId}`, { method: 'DELETE' }),
 };
