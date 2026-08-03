@@ -4,6 +4,7 @@ import '../design.css';
 import { DesignPage } from './DesignPage';
 import { GardenMap } from './GardenMap';
 import { JourneyPage } from './JourneyPage';
+import { MappingAssistant } from './MappingAssistant';
 import { UnderstandingPage } from './UnderstandingPage';
 import { SettingsPage } from './SettingsPage';
 
@@ -31,7 +32,7 @@ export function AppShell({ user, gardens, garden, onSelectGarden, onGardenChange
 
       <div className="app-content">
         {tab === 'garden' && <GardenMap garden={garden} onGardenChanged={onGardenChanged} />}
-        {tab === 'understanding' && <UnderstandingPage garden={garden} />}
+        {tab === 'understanding' && <><MappingAssistant garden={garden} /><UnderstandingPage garden={garden} /></>}
         {tab === 'design' && <DesignPage garden={garden} />}
         {tab === 'journey' && <JourneyPage garden={garden} />}
         {tab === 'settings' && <SettingsPage user={user} garden={garden} onGardenChanged={onGardenChanged} onLogout={onLogout} />}
