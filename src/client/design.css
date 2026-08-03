@@ -10,8 +10,20 @@
   --design-brown: #806348;
 }
 
-.bottom-nav { grid-template-columns: repeat(5, 1fr); }
-.bottom-nav button { padding-inline: .15rem; font-size: .7rem; }
+.app-content { position: relative; z-index: 0; min-width: 0; }
+.bottom-nav {
+  grid-template-columns: repeat(5, 1fr);
+  z-index: 1000;
+  isolation: isolate;
+  pointer-events: auto;
+}
+.bottom-nav button {
+  position: relative;
+  z-index: 1;
+  padding-inline: .15rem;
+  font-size: .7rem;
+  pointer-events: auto;
+}
 
 .design-page { max-width: 1180px; }
 .page-heading-row, .project-heading, .option-heading {
