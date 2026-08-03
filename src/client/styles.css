@@ -147,6 +147,13 @@ textarea { resize: vertical; }
 .empty-state { border: 1px dashed var(--border); background: var(--surface); border-radius: 16px; padding: 1.2rem; text-align: center; }
 .empty-state p { color: var(--text-muted); margin: .4rem 0 0; }
 .settings-section { margin-top: 2rem; padding-top: 1.4rem; border-top: 1px solid var(--border); }
+.location-fieldset { display: grid; gap: .75rem; border: 1px solid var(--border); border-radius: 16px; padding: .85rem; margin: 0; background: var(--surface-muted); }
+.location-fieldset legend { padding: 0 .35rem; font-weight: 750; color: var(--green-900); }
+.location-fieldset .field-help { margin: 0; line-height: 1.45; }
+.settings-location-map { width: 100%; min-height: 300px; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #dde4da; }
+.coordinate-details { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: .7rem; }
+.coordinate-details summary { cursor: pointer; font-weight: 700; }
+.coordinate-details .coordinate-row { margin-top: .75rem; }
 
 @media (min-width: 760px) {
   .bottom-nav { left: 50%; right: auto; width: 420px; transform: translateX(-50%); border: 1px solid var(--border); border-bottom: 0; border-radius: 18px 18px 0 0; }
