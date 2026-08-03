@@ -55,7 +55,48 @@ test('first user can create, map, understand and plan a garden', async ({ page }
   expect(persistedName).toBe('Æbletræ');
 
   await page.getByRole('button', { name: 'Kortlæg' }).click();
+  await expect(page.getByRole('heading', { name: 'Få billederne til at hænge sammen' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Forstå din have' })).toBeVisible();
+
+  const captureWorkspace = await page.evaluate(async () => {
+    const gardens = (await fetch('/api/gardens').then((response) => response.json())) as {
+      gardens: Array<{ id: string }>;
+    };
+    const gardenId = gardens.gardens[0]?.id;
+    if (!gardenId) throw new Error('Garden missing before capture check');
+    const startedResponse = await fetch(`/api/gardens/${gardenId}/capture/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Testtur', mode: 'perimeter', targetOverlapPercent: 35 }),
+    });
+    if (!startedResponse.ok) throw new Error(await startedResponse.text());
+    const started = (await startedResponse.json()) as {
+      sessionId: string;
+      workspace: { activeSession: { targetOverlapPercent: number; frames: unknown[] } | null };
+    };
+    const completedResponse = await fetch(`/api/gardens/${gardenId}/capture/sessions/${started.sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'completed' }),
+    });
+    if (!completedResponse.ok) throw new Error(await completedResponse.text());
+    const completed = (await completedResponse.json()) as {
+      workspace: { activeSession: null; sessions: Array<{ id: string; status: string }> };
+    };
+    return {
+      targetOverlapPercent: started.workspace.activeSession?.targetOverlapPercent,
+      frameCount: started.workspace.activeSession?.frames.length,
+      activeAfterCompletion: completed.workspace.activeSession,
+      completedStatus: completed.workspace.sessions.find((item) => item.id === started.sessionId)?.status,
+    };
+  });
+
+  expect(captureWorkspace).toEqual({
+    targetOverlapPercent: 35,
+    frameCount: 0,
+    activeAfterCompletion: null,
+    completedStatus: 'completed',
+  });
 
   const walkResponsePromise = page.waitForResponse(
     (response) => response.url().endsWith('/walks') && response.request().method() === 'POST',
@@ -153,6 +194,7 @@ test('first user can create, map, understand and plan a garden', async ({ page }
   await page.reload();
   await expect(page.locator('.garden-name')).toHaveText('Vores have');
   await page.getByRole('button', { name: 'Kortlæg' }).click();
+  await expect(page.getByRole('heading', { name: 'Få billederne til at hænge sammen' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '1 registrerede planter' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Næste stop' })).toBeVisible();
 
@@ -162,13 +204,16 @@ test('first user can create, map, understand and plan a garden', async ({ page }
     };
     const gardenId = gardens.gardens[0]?.id;
     if (!gardenId) throw new Error('Garden missing after reload');
-    const [detail, understanding, design] = await Promise.all([
+    const [detail, understanding, design, capture] = await Promise.all([
       fetch(`/api/gardens/${gardenId}`).then((response) => response.json()) as Promise<{ garden: { features: Array<{ name: string }> } }>,
       fetch(`/api/gardens/${gardenId}/understanding`).then((response) => response.json()) as Promise<{
         understanding: { plants: Array<{ commonName: string }>; assessments: Array<{ value: string }> };
       }>,
       fetch(`/api/gardens/${gardenId}/design`).then((response) => response.json()) as Promise<{
         workspace: { projects: Array<{ title: string; options: Array<{ status: string }> }> };
+      }>,
+      fetch(`/api/gardens/${gardenId}/capture`).then((response) => response.json()) as Promise<{
+        workspace: { sessions: Array<{ title: string; status: string }> };
       }>,
     ]);
     return {
@@ -177,6 +222,8 @@ test('first user can create, map, understand and plan a garden', async ({ page }
       assessment: understanding.understanding.assessments[0]?.value,
       designTitle: design.workspace.projects[0]?.title,
       selectedPlans: design.workspace.projects[0]?.options.filter((item) => item.status === 'selected').length,
+      captureTitle: capture.workspace.sessions[0]?.title,
+      captureStatus: capture.workspace.sessions[0]?.status,
     };
   });
 
@@ -186,6 +233,8 @@ test('first user can create, map, understand and plan a garden', async ({ page }
     assessment: 'Sol fra middag til aften',
     designTitle: 'Nem plan ved terrassen',
     selectedPlans: 1,
+    captureTitle: 'Testtur',
+    captureStatus: 'completed',
   });
 
   await page.getByRole('button', { name: 'Planer' }).click();
