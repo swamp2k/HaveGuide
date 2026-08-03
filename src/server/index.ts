@@ -4,6 +4,7 @@ import type { AppEnvironment } from './types';
 import { authRoutes } from './routes/auth';
 import { designRoutes } from './routes/designs';
 import { gardenRoutes } from './routes/gardens';
+import { journeyRoutes } from './routes/journey';
 import { understandingRoutes } from './routes/understanding';
 import { mediaRoutes } from './routes/media';
 import { sameOriginWrites, securityHeaders } from './middleware/security';
@@ -19,6 +20,7 @@ app.route('/api/auth', authRoutes);
 app.route('/api/gardens', gardenRoutes);
 app.route('/api/gardens', understandingRoutes);
 app.route('/api/gardens', designRoutes);
+app.route('/api/gardens', journeyRoutes);
 app.route('/api/media', mediaRoutes);
 
 app.notFound((c) => {
