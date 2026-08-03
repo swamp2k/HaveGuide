@@ -20,11 +20,6 @@ import { jsonError } from '../utils/response';
 export const designRoutes = new Hono<AppEnvironment>();
 designRoutes.use('*', requireAuth);
 
-async function ownsGarden(c: Parameters<typeof gardenBelongsToUser>[0] extends never ? never : never): Promise<boolean> {
-  void c;
-  return false;
-}
-
 async function mediaBelongsToGarden(
   db: D1Database,
   userId: string,
