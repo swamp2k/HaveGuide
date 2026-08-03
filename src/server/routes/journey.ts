@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import {
   createChangeSchema,
   createShoppingItemSchema,
@@ -23,12 +23,7 @@ import { jsonError } from '../utils/response';
 export const journeyRoutes = new Hono<AppEnvironment>();
 journeyRoutes.use('*', requireAuth);
 
-async function ownsGarden(c: Parameters<typeof journeyRoutes.get>[1] extends never ? never : never): Promise<boolean> {
-  void c;
-  return false;
-}
-
-async function requireGarden(c: any, gardenId: string): Promise<boolean> {
+async function requireGarden(c: Context<AppEnvironment>, gardenId: string): Promise<boolean> {
   return gardenBelongsToUser(c.env.DB, c.get('user').id, gardenId);
 }
 
