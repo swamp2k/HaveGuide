@@ -1,8 +1,19 @@
 import { Hono, type Context } from 'hono';
-import { credentialsSchema } from '../../shared/schemas';
+import {
+  passwordChallengeRequestSchema,
+  passwordLoginSchema,
+  passwordSetupSchema,
+} from '../../shared/schemas';
 import type { AppEnvironment } from '../types';
 import { clearSessionCookie, readSessionCookie, writeSessionCookie } from '../auth/cookies';
-import { hashPassword, randomToken, sha256, verifyPassword } from '../auth/crypto';
+import {
+  createPasswordVerifier,
+  randomPasswordChallenge,
+  randomToken,
+  readPasswordChallenge,
+  sha256,
+  verifyPasswordProof,
+} from '../auth/crypto';
 import { requireAuth } from '../middleware/auth';
 import {
   clearLoginFailures,
@@ -11,7 +22,12 @@ import {
   recordLoginFailure,
 } from '../repositories/login-attempts';
 import { createSession, deleteSessionByTokenHash } from '../repositories/sessions';
-import { countUsers, createFirstUser, findUserByNormalizedUsername } from '../repositories/users';
+import {
+  countUsers,
+  createFirstUser,
+  findUserByNormalizedUsername,
+  updatePasswordHash,
+} from '../repositories/users';
 import { jsonError } from '../utils/response';
 import { addDays } from '../utils/time';
 import { getClientIp, normalizeUsername, parseJson } from '../utils/request';
@@ -51,13 +67,27 @@ authRoutes.get('/bootstrap', async (c) => {
   return c.json({ setupRequired, authenticated: Boolean(row), user: row ?? null });
 });
 
+authRoutes.post('/challenge', async (c) => {
+  const parsed = passwordChallengeRequestSchema.safeParse(await parseJson<unknown>(c));
+  if (!parsed.success) return jsonError(c, 422, 'Brugernavnet er ikke gyldigt.', 'INVALID_INPUT');
+
+  const user = await findUserByNormalizedUsername(c.env.DB, normalizeUsername(parsed.data.username));
+  const challenge = user ? readPasswordChallenge(user.password_hash) : null;
+  return c.json({ challenge: challenge ?? randomPasswordChallenge() });
+});
+
 authRoutes.post('/setup', async (c) => {
-  const raw = await parseJson<unknown>(c);
-  const parsed = credentialsSchema.safeParse(raw);
-  if (!parsed.success) return jsonError(c, 422, 'Kontrollér brugernavn og adgangskode.', 'INVALID_INPUT', parsed.error.flatten());
+  const parsed = passwordSetupSchema.safeParse(await parseJson<unknown>(c));
+  if (!parsed.success) {
+    return jsonError(c, 422, 'Kontrollér brugernavn og adgangskode.', 'INVALID_INPUT', parsed.error.flatten());
+  }
 
   const usernameNormalized = normalizeUsername(parsed.data.username);
-  const passwordHash = await hashPassword(parsed.data.password);
+  const passwordHash = await createPasswordVerifier(
+    parsed.data.proof,
+    parsed.data.salt,
+    parsed.data.iterations,
+  );
   const user = await createFirstUser(c.env.DB, parsed.data.username.trim(), usernameNormalized, passwordHash);
   if (!user) return jsonError(c, 409, 'Den første bruger er allerede oprettet.', 'SETUP_COMPLETE');
 
@@ -66,8 +96,7 @@ authRoutes.post('/setup', async (c) => {
 });
 
 authRoutes.post('/login', async (c) => {
-  const raw = await parseJson<unknown>(c);
-  const parsed = credentialsSchema.safeParse(raw);
+  const parsed = passwordLoginSchema.safeParse(await parseJson<unknown>(c));
   if (!parsed.success) return jsonError(c, 422, 'Kontrollér loginoplysningerne.', 'INVALID_INPUT');
 
   const usernameNormalized = normalizeUsername(parsed.data.username);
@@ -77,12 +106,17 @@ authRoutes.post('/login', async (c) => {
   }
 
   const user = await findUserByNormalizedUsername(c.env.DB, usernameNormalized);
-  const valid = user ? await verifyPassword(parsed.data.password, user.password_hash) : false;
-  if (!user || !valid) {
+  const verification = user
+    ? await verifyPasswordProof(parsed.data.proof, user.password_hash)
+    : await verifyPasswordProof(parsed.data.proof, 'invalid');
+  if (!user || !verification.valid) {
     await recordLoginFailure(c.env.DB, identityHash);
     return jsonError(c, 401, 'Forkert brugernavn eller adgangskode.', 'INVALID_CREDENTIALS');
   }
 
+  if (verification.upgradedVerifier) {
+    await updatePasswordHash(c.env.DB, user.id, verification.upgradedVerifier);
+  }
   await clearLoginFailures(c.env.DB, identityHash);
   await issueSession(c, user.id);
   c.executionCtx.waitUntil(pruneLoginFailures(c.env.DB));
