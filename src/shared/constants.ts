@@ -73,4 +73,44 @@ export const WALK_STEPS = [
   { title: 'Afslut med et overblik', description: 'Se hvad der mangler, og bekræft de vigtigste observationer.' },
 ] as const;
 
+export const DESIGN_GOALS = ['low_maintenance', 'slope', 'privacy', 'flowers', 'biodiversity', 'seating', 'edible', 'other'] as const;
+export const DESIGN_GOAL_LABELS: Record<(typeof DESIGN_GOALS)[number], string> = {
+  low_maintenance: 'Mindre vedligeholdelse',
+  slope: 'En bedre skrænt',
+  privacy: 'Mere læ og privatliv',
+  flowers: 'Flere blomster',
+  biodiversity: 'Mere liv i haven',
+  seating: 'Et bedre opholdssted',
+  edible: 'Flere spiselige planter',
+  other: 'Et andet mål',
+};
+
+export const DESIGN_EFFORT_LEVELS = ['low', 'medium', 'flexible'] as const;
+export const DESIGN_EFFORT_LABELS: Record<(typeof DESIGN_EFFORT_LEVELS)[number], string> = {
+  low: 'Så lidt arbejde som muligt',
+  medium: 'Et almindeligt niveau',
+  flexible: 'Arbejdet må gerne variere',
+};
+
+export const DESIGN_BUDGET_LEVELS = ['low', 'medium', 'high', 'flexible'] as const;
+export const DESIGN_BUDGET_LABELS: Record<(typeof DESIGN_BUDGET_LEVELS)[number], string> = {
+  low: 'Lavt budget',
+  medium: 'Mellem budget',
+  high: 'Plads til større ændringer',
+  flexible: 'Ikke besluttet endnu',
+};
+
+export const DESIGN_COLORS = ['white', 'yellow', 'orange', 'pink', 'red', 'purple', 'blue', 'green', 'brown'] as const;
+export const DESIGN_COLOR_LABELS: Record<(typeof DESIGN_COLORS)[number], string> = {
+  white: 'Hvid',
+  yellow: 'Gul',
+  orange: 'Orange',
+  pink: 'Rosa',
+  red: 'Rød',
+  purple: 'Lilla',
+  blue: 'Blå',
+  green: 'Grøn',
+  brown: 'Brun',
+};
+
 export const DEFAULT_MAP_CENTER = { lat: 56.1629, lng: 10.2039 };

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('first user can create, map and understand a garden', async ({ page }) => {
+test('first user can create, map, understand and plan a garden', async ({ page }) => {
   page.on('console', (message) => console.log(`[browser:${message.type()}] ${message.text()}`));
   page.on('pageerror', (error) => console.error(`[browser-error] ${error.message}`));
 
@@ -98,6 +98,58 @@ test('first user can create, map and understand a garden', async ({ page }) => {
   expect(understandingBeforeReload.plants[0]?.commonName).toBe('Syren');
   expect(understandingBeforeReload.assessments[0]?.value).toBe('Sol fra middag til aften');
 
+  const designBeforeReload = await page.evaluate(async () => {
+    const gardens = (await fetch('/api/gardens').then((response) => response.json())) as { gardens: Array<{ id: string }> };
+    const gardenId = gardens.gardens[0]?.id;
+    if (!gardenId) throw new Error('Garden missing before design check');
+    const detail = (await fetch(`/api/gardens/${gardenId}`).then((response) => response.json())) as {
+      garden: { features: Array<{ id: string }> };
+    };
+    const projectResponse = await fetch(`/api/gardens/${gardenId}/design/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetFeatureId: detail.garden.features[0]?.id,
+        title: 'Nem plan ved terrassen',
+        goal: 'low_maintenance',
+        constraints: {
+          effort: 'low',
+          budget: 'medium',
+          childrenUseGarden: true,
+          petsUseGarden: true,
+          avoidPotentiallyHarmful: true,
+          colors: ['purple', 'white'],
+          maxHeightCm: 180,
+          winterInterest: false,
+          notes: 'Bevar æbletræet',
+        },
+      }),
+    });
+    if (!projectResponse.ok) throw new Error(await projectResponse.text());
+    const projectBody = (await projectResponse.json()) as {
+      workspace: { projects: Array<{ id: string; options: Array<{ id: string; plants: Array<{ safety: string }> }> }> };
+    };
+    const project = projectBody.workspace.projects[0];
+    const option = project?.options[0];
+    if (!project || !option) throw new Error('Design options missing');
+    const selectionResponse = await fetch(`/api/gardens/${gardenId}/design/projects/${project.id}/select`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ optionId: option.id }),
+    });
+    if (!selectionResponse.ok) throw new Error(await selectionResponse.text());
+    const selected = (await selectionResponse.json()) as {
+      workspace: { projects: Array<{ status: string; options: Array<{ status: string }> }> };
+    };
+    return {
+      optionCount: project.options.length,
+      containsAvoidPlant: project.options.flatMap((item) => item.plants).some((plant) => plant.safety === 'avoid'),
+      projectStatus: selected.workspace.projects[0]?.status,
+      selectedCount: selected.workspace.projects[0]?.options.filter((item) => item.status === 'selected').length,
+    };
+  });
+  expect(designBeforeReload).toEqual({ optionCount: 3, containsAvoidPlant: false, projectStatus: 'selected', selectedCount: 1 });
+
   await page.reload();
   await expect(page.locator('.garden-name')).toHaveText('Vores have');
   await page.getByRole('button', { name: 'Kortlæg' }).click();
@@ -110,16 +162,21 @@ test('first user can create, map and understand a garden', async ({ page }) => {
     };
     const gardenId = gardens.gardens[0]?.id;
     if (!gardenId) throw new Error('Garden missing after reload');
-    const [detail, understanding] = await Promise.all([
+    const [detail, understanding, design] = await Promise.all([
       fetch(`/api/gardens/${gardenId}`).then((response) => response.json()) as Promise<{ garden: { features: Array<{ name: string }> } }>,
       fetch(`/api/gardens/${gardenId}/understanding`).then((response) => response.json()) as Promise<{
         understanding: { plants: Array<{ commonName: string }>; assessments: Array<{ value: string }> };
+      }>,
+      fetch(`/api/gardens/${gardenId}/design`).then((response) => response.json()) as Promise<{
+        workspace: { projects: Array<{ title: string; options: Array<{ status: string }> }> };
       }>,
     ]);
     return {
       featureName: detail.garden.features[0]?.name,
       plantName: understanding.understanding.plants[0]?.commonName,
       assessment: understanding.understanding.assessments[0]?.value,
+      designTitle: design.workspace.projects[0]?.title,
+      selectedPlans: design.workspace.projects[0]?.options.filter((item) => item.status === 'selected').length,
     };
   });
 
@@ -127,5 +184,12 @@ test('first user can create, map and understand a garden', async ({ page }) => {
     featureName: 'Æbletræ',
     plantName: 'Syren',
     assessment: 'Sol fra middag til aften',
+    designTitle: 'Nem plan ved terrassen',
+    selectedPlans: 1,
   });
+
+  await page.getByRole('button', { name: 'Planer' }).click();
+  await expect(page.getByRole('heading', { name: 'Planlæg din have' })).toBeVisible();
+  await expect(page.locator('.design-option')).toHaveCount(3);
+  await expect(page.getByText('Valgt', { exact: true })).toBeVisible();
 });

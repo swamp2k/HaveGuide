@@ -2,6 +2,10 @@ import { z } from 'zod';
 import {
   ASSESSMENT_CATEGORIES,
   CONFIDENCE_LEVELS,
+  DESIGN_BUDGET_LEVELS,
+  DESIGN_COLORS,
+  DESIGN_EFFORT_LEVELS,
+  DESIGN_GOALS,
   FEATURE_TYPES,
   OBSERVATION_KINDS,
   PLANT_ORGANS,
@@ -88,3 +92,36 @@ export const updateWalkSchema = z.object({
 });
 export const suggestionDecisionSchema = z.object({ action: z.enum(['accept', 'reject']) });
 export const mergePlantsSchema = z.object({ duplicatePlantId: z.string().uuid() });
+
+const designConstraintsSchema = z.object({
+  effort: z.enum(DESIGN_EFFORT_LEVELS).default('low'),
+  budget: z.enum(DESIGN_BUDGET_LEVELS).default('flexible'),
+  childrenUseGarden: z.boolean().default(false),
+  petsUseGarden: z.boolean().default(false),
+  avoidPotentiallyHarmful: z.boolean().default(true),
+  colors: z.array(z.enum(DESIGN_COLORS)).max(DESIGN_COLORS.length).default([]),
+  maxHeightCm: z.number().int().min(10).max(1000).nullable().default(null),
+  winterInterest: z.boolean().default(false),
+  notes: z.string().trim().max(2000).optional().default(''),
+});
+
+const designInspirationInputSchema = z.object({
+  mediaId: z.string().uuid().optional(),
+  sourceUrl: z.string().trim().max(500).optional().default(''),
+  title: z.string().trim().min(1).max(160),
+  notes: z.string().trim().max(2000).optional().default(''),
+  styleTags: z.array(z.string().trim().min(1).max(60)).max(12).default([]),
+  desiredElements: z.array(z.string().trim().min(1).max(120)).max(20).default([]),
+  avoidedElements: z.array(z.string().trim().min(1).max(120)).max(20).default([]),
+});
+
+export const createDesignProjectSchema = z.object({
+  targetFeatureId: z.string().uuid().optional(),
+  title: z.string().trim().min(1).max(160),
+  goal: z.enum(DESIGN_GOALS),
+  constraints: designConstraintsSchema,
+  inspiration: designInspirationInputSchema.optional(),
+});
+
+export const selectDesignOptionSchema = z.object({ optionId: z.string().uuid() });
+export const updateDesignVisualSchema = z.object({ backgroundMediaId: z.string().uuid().nullable() });
