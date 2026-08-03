@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Garden, GardenDetail, UserSummary } from '../../shared/types';
 import '../design.css';
+import { AerialEditor } from './AerialEditor';
 import { DesignPage } from './DesignPage';
 import { GardenMap } from './GardenMap';
 import { JourneyPage } from './JourneyPage';
@@ -31,7 +32,7 @@ export function AppShell({ user, gardens, garden, onSelectGarden, onGardenChange
       </header>
 
       <div className="app-content">
-        {tab === 'garden' && <GardenMap garden={garden} onGardenChanged={onGardenChanged} />}
+        {tab === 'garden' && <><GardenMap garden={garden} onGardenChanged={onGardenChanged} /><AerialEditor garden={garden} onGardenChanged={onGardenChanged} /></>}
         {tab === 'understanding' && <><MappingAssistant garden={garden} /><UnderstandingPage garden={garden} /></>}
         {tab === 'design' && <DesignPage garden={garden} />}
         {tab === 'journey' && <JourneyPage garden={garden} />}
