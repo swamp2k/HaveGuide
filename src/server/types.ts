@@ -7,6 +7,7 @@ export type AppBindings = Env & {
   MAX_UPLOAD_MB: string;
   PLANTNET_API_KEY?: string;
   PLANTNET_PROJECT?: string;
+  DATAFORDELER_API_KEY?: string;
 };
 
 export interface AppVariables { user: AuthUser; session: SessionContext; }
