@@ -26,11 +26,6 @@ mapRoutes.get('/orthophoto/:z/:x/:y', async (c) => {
     return jsonError(c, 400, 'Tile-koordinaterne er ikke gyldige.', 'INVALID_TILE');
   }
 
-  const cache = caches.default;
-  const cacheKey = new Request(c.req.url, { method: 'GET' });
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached;
-
   const upstream = new URL('https://wmts.datafordeler.dk/GeoDanmarkOrto/orto_foraar_webm/1.0.0/WMTS');
   upstream.searchParams.set('apikey', apiKey);
   upstream.searchParams.set('SERVICE', 'WMTS');
@@ -54,14 +49,12 @@ mapRoutes.get('/orthophoto/:z/:x/:y', async (c) => {
       x,
       y,
     }));
-    return jsonError(c, 502, 'Luftfotoet kunne ikke hentes.', 'AERIAL_UPSTREAM_FAILED');
+    return jsonError(c, 503, 'Luftfotoet kunne ikke hentes.', 'AERIAL_UPSTREAM_FAILED');
   }
 
   const headers = new Headers();
   headers.set('Content-Type', response.headers.get('Content-Type') ?? 'image/jpeg');
   headers.set('Cache-Control', 'public, max-age=86400');
   headers.set('X-Content-Type-Options', 'nosniff');
-  const tile = new Response(response.body, { status: 200, headers });
-  c.executionCtx.waitUntil(cache.put(cacheKey, tile.clone()));
-  return tile;
+  return new Response(response.body, { status: 200, headers });
 });
