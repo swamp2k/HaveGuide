@@ -130,7 +130,7 @@ function previewCollection(drawing: DrawingState | null) {
 
   let geometry: GardenGeometry;
   if (drawing.kind === 'Point' || positions.length === 1) {
-    geometry = { type: 'Point', coordinates: positions[0] };
+    geometry = { type: 'Point', coordinates: positions[0]! };
   } else if (drawing.kind === 'LineString' || positions.length === 2) {
     geometry = { type: 'LineString', coordinates: positions };
   } else {
@@ -577,7 +577,7 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
 
   function undoLastVertex() {
     if (!drawing || drawing.vertices.length === 0) return;
-    const lastVertex = drawing.vertices[drawing.vertices.length - 1];
+    const lastVertex = drawing.vertices[drawing.vertices.length - 1]!;
     void removeVertex(lastVertex.id);
   }
 
