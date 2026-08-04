@@ -89,6 +89,8 @@ body.aerial-editor-open .bottom-nav {
 .aerial-editor-panel {
   position: relative;
   z-index: 5;
+  max-height: min(42dvh, 420px);
+  overflow-y: auto;
   padding: .75rem .75rem max(1rem, env(safe-area-inset-bottom));
   background: rgb(255 255 255 / 98%);
   border-top: 1px solid var(--border);
@@ -96,6 +98,12 @@ body.aerial-editor-open .bottom-nav {
 
 .aerial-editor-panel .status-message { margin: 0 0 .65rem; }
 .aerial-editor-panel .field-help { margin: 0 0 .65rem; }
+.aerial-editor-home,
+.aerial-edit-workspace {
+  display: grid;
+  gap: .75rem;
+}
+
 .aerial-editor-controls {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
@@ -103,10 +111,20 @@ body.aerial-editor-open .bottom-nav {
   gap: .6rem;
 }
 
-.aerial-editor-controls label {
+.aerial-editor-controls label,
+.aerial-existing-editor label {
   display: grid;
   gap: .35rem;
   font-weight: 700;
+}
+
+.aerial-existing-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: .6rem;
+  padding-top: .75rem;
+  border-top: 1px solid var(--border);
 }
 
 .aerial-drawing-actions {
@@ -118,10 +136,60 @@ body.aerial-editor-open .bottom-nav {
 
 .aerial-drawing-actions strong { margin-right: auto; }
 
+.aerial-vertex-marker {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #173e2b;
+  border-radius: 50%;
+  background: #ffd56c;
+  color: #173e2b;
+  font-size: .75rem;
+  font-weight: 900;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 30%);
+  cursor: grab;
+}
+
+.aerial-vertex-marker:active { cursor: grabbing; }
+
+.aerial-vertex-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: .4rem;
+  padding-top: .65rem;
+  border-top: 1px solid var(--border);
+}
+
+.aerial-vertex-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .4rem;
+  min-height: 40px;
+  padding: .35rem .45rem .35rem .65rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  font-size: .85rem;
+  font-weight: 700;
+}
+
+.aerial-vertex-list button {
+  min-height: 32px;
+  border: 1px solid #e4b7b2;
+  border-radius: 8px;
+  padding: .25rem .5rem;
+  background: #fff5f4;
+  color: var(--danger);
+  font-weight: 750;
+}
+
 @media (max-width: 620px) {
   .aerial-editor-launch { top: .55rem; left: .55rem; font-size: .82rem; }
+  .aerial-editor-panel { max-height: 48dvh; }
   .aerial-editor-controls { grid-template-columns: 1fr 1fr; }
   .aerial-editor-controls .primary-button { grid-column: 1 / -1; }
+  .aerial-existing-editor { grid-template-columns: 1fr; }
   .aerial-drawing-actions > * { flex: 1; }
   .aerial-drawing-actions strong { flex-basis: 100%; }
+  .aerial-vertex-list { grid-template-columns: 1fr 1fr; }
 }
