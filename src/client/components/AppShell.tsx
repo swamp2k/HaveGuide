@@ -6,8 +6,9 @@ import { DesignPage } from './DesignPage';
 import { GardenMap } from './GardenMap';
 import { JourneyPage } from './JourneyPage';
 import { MappingAssistant } from './MappingAssistant';
-import { UnderstandingPage } from './UnderstandingPage';
 import { SettingsPage } from './SettingsPage';
+import { UnderstandingPage } from './UnderstandingPage';
+import './AppShell.css';
 
 interface AppShellProps {
   user: UserSummary;
@@ -22,13 +23,30 @@ type Tab = 'garden' | 'understanding' | 'design' | 'journey' | 'settings';
 
 export function AppShell({ user, gardens, garden, onSelectGarden, onGardenChanged, onLogout }: AppShellProps) {
   const [tab, setTab] = useState<Tab>('garden');
+
   return (
     <div className="app-shell">
       <header className="app-header">
         <div className="header-brand"><span aria-hidden="true">🌱</span><strong>Have Guide</strong></div>
-        {gardens.length > 1 ? (
-          <label className="garden-picker"><span className="sr-only">Vælg have</span><select value={garden.id} onChange={(event) => onSelectGarden(event.target.value)}>{gardens.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        ) : <span className="garden-name">{garden.name}</span>}
+        <div className="header-garden-actions">
+          <button
+            className={`header-settings-button${tab === 'settings' ? ' active' : ''}`}
+            type="button"
+            onClick={() => setTab('settings')}
+            aria-label="Åbn indstillinger"
+            aria-current={tab === 'settings' ? 'page' : undefined}
+          >
+            <span aria-hidden="true">⚙</span>
+          </button>
+          {gardens.length > 1 ? (
+            <label className="garden-picker">
+              <span className="sr-only">Vælg have</span>
+              <select value={garden.id} onChange={(event) => onSelectGarden(event.target.value)}>
+                {gardens.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            </label>
+          ) : <span className="garden-name">{garden.name}</span>}
+        </div>
       </header>
 
       <div className="app-content">
@@ -44,7 +62,6 @@ export function AppShell({ user, gardens, garden, onSelectGarden, onGardenChange
         <button className={tab === 'understanding' ? 'active' : ''} type="button" onClick={() => setTab('understanding')} aria-current={tab === 'understanding' ? 'page' : undefined}><span aria-hidden="true">◎</span><span>Kortlæg</span></button>
         <button className={tab === 'design' ? 'active' : ''} type="button" onClick={() => setTab('design')} aria-current={tab === 'design' ? 'page' : undefined}><span aria-hidden="true">✦</span><span>Planer</span></button>
         <button className={tab === 'journey' ? 'active' : ''} type="button" onClick={() => setTab('journey')} aria-current={tab === 'journey' ? 'page' : undefined}><span aria-hidden="true">✓</span><span>Opgaver</span></button>
-        <button className={tab === 'settings' ? 'active' : ''} type="button" onClick={() => setTab('settings')} aria-current={tab === 'settings' ? 'page' : undefined}><span aria-hidden="true">⚙</span><span>Indstillinger</span></button>
       </nav>
     </div>
   );
