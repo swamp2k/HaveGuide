@@ -84,24 +84,63 @@
   flex: 0 0 auto;
 }
 
-.capture-instructions {
+.survey-plan {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .65rem;
   margin: .9rem 0 1rem;
-  padding-left: 1.4rem;
-  color: var(--text-muted);
 }
 
-.capture-instructions li { margin-bottom: .5rem; line-height: 1.4; }
+.survey-plan > div {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  min-height: 66px;
+  padding: .65rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-muted);
+}
+
+.survey-plan strong {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green-700);
+  color: white;
+}
+
+.survey-plan span {
+  color: var(--text-muted);
+  font-size: .86rem;
+  line-height: 1.35;
+}
+
+.active-survey-status {
+  margin: 0 0 .75rem;
+  padding: .65rem .75rem;
+  border-radius: 12px;
+  background: #edf4ea;
+  color: var(--green-900);
+  font-weight: 700;
+}
 
 .guided-camera {
   position: fixed;
-  z-index: 2000;
+  z-index: 6500;
   inset: 0;
+  height: 100dvh;
+  min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
-  gap: .65rem;
-  padding: max(.65rem, env(safe-area-inset-top)) .65rem max(.65rem, env(safe-area-inset-bottom));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: .55rem;
+  padding: max(.55rem, env(safe-area-inset-top)) .55rem max(.65rem, env(safe-area-inset-bottom));
   background: #09120d;
   color: white;
+  overflow: hidden;
 }
 
 .guided-camera-header {
@@ -109,17 +148,20 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  padding: .35rem .35rem 0;
+  min-height: 48px;
+  padding: .2rem .25rem 0;
 }
 
-.guided-camera-header .eyebrow { color: #b8d8bf; }
-.guided-camera-header strong { display: block; max-width: 34rem; line-height: 1.35; }
+.guided-camera-header .eyebrow { color: #b8d8bf; margin-bottom: .2rem; }
+.guided-camera-header strong { display: block; max-width: 34rem; line-height: 1.3; }
+
 .camera-close {
   border: 1px solid rgb(255 255 255 / 28%);
   background: rgb(255 255 255 / 12%);
   color: white;
   width: 44px;
   height: 44px;
+  flex: 0 0 auto;
   border-radius: 50%;
   font-size: 1.7rem;
   line-height: 1;
@@ -127,7 +169,7 @@
 
 .camera-stage {
   position: relative;
-  min-height: 260px;
+  min-height: 0;
   overflow: hidden;
   border-radius: 18px;
   background: #18251c;
@@ -166,63 +208,150 @@
   inset: 0;
   pointer-events: none;
 }
+
 .camera-guides::before,
 .camera-guides::after,
 .camera-guides span {
   content: '';
   position: absolute;
-  background: rgb(255 255 255 / 35%);
+  background: rgb(255 255 255 / 28%);
 }
+
 .camera-guides::before { left: 33.33%; top: 0; bottom: 0; width: 1px; }
 .camera-guides::after { left: 66.66%; top: 0; bottom: 0; width: 1px; }
 .camera-guides span:first-child { top: 33.33%; left: 0; right: 0; height: 1px; }
 .camera-guides span:last-child { top: 66.66%; left: 0; right: 0; height: 1px; }
 
+.virtual-capture-guide {
+  position: absolute;
+  z-index: 4;
+  top: .7rem;
+  left: .7rem;
+  right: .7rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: .7rem;
+  padding: .7rem .8rem;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 16px;
+  background: rgb(4 15 9 / 78%);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 22px rgb(0 0 0 / 24%);
+  pointer-events: none;
+}
+
+.virtual-capture-guide.ready {
+  border-color: #8fd19e;
+  background: rgb(18 68 39 / 84%);
+}
+
+.guide-arrow {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 14%);
+  color: #f4ce62;
+  font-size: 1.7rem;
+  font-weight: 900;
+  transition: transform .18s ease;
+}
+
+.virtual-capture-guide.ready .guide-arrow { color: #d9f2df; }
+.virtual-capture-guide strong { display: block; margin-bottom: .2rem; }
+.virtual-capture-guide p { margin: 0; color: rgb(255 255 255 / 78%); font-size: .82rem; line-height: 1.35; }
+
+.capture-shot-progress {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 3.5rem;
+  transform: translateX(-50%);
+  display: flex;
+  gap: .38rem;
+  padding: .4rem .5rem;
+  border-radius: 999px;
+  background: rgb(4 15 9 / 68%);
+  backdrop-filter: blur(8px);
+}
+
+.capture-shot-progress span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 32%);
+}
+
+.capture-shot-progress span.done { background: #8fd19e; }
+.capture-shot-progress span.current { width: 22px; border-radius: 999px; background: #f4ce62; }
+
 .sensor-strip {
   position: absolute;
+  z-index: 4;
   left: .6rem;
   right: .6rem;
   bottom: .6rem;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: .4rem;
-  padding: .45rem .55rem;
+  gap: .35rem;
+  padding: .42rem .5rem;
   border-radius: 12px;
   background: rgb(4 15 9 / 72%);
   backdrop-filter: blur(8px);
-  font-size: .78rem;
+  font-size: .74rem;
 }
-.sensor-strip span { padding: .25rem .4rem; border-radius: 8px; background: rgb(255 255 255 / 10%); }
+
+.sensor-strip span { padding: .22rem .35rem; border-radius: 8px; background: rgb(255 255 255 / 10%); }
 .sensor-strip button { margin-left: auto; border: 0; color: white; background: transparent; text-decoration: underline; }
 
-.guided-camera .status-message { margin: 0; }
+.guided-camera-footer {
+  display: grid;
+  gap: .45rem;
+  min-height: 0;
+}
+
+.guided-camera .status-message {
+  margin: 0;
+  padding: .55rem .7rem;
+  font-size: .82rem;
+}
+
 .capture-quality {
   display: flex;
   justify-content: space-between;
   gap: .75rem;
+  border: 1px solid rgb(255 255 255 / 18%);
   border-radius: 12px;
-  padding: .65rem .8rem;
+  padding: .5rem .65rem;
   background: rgb(255 255 255 / 10%);
+  font-size: .78rem;
 }
+
 .quality-good { border-color: #76b786; }
 .quality-review { border-color: #d9aa4c; }
 .quality-retake { border-color: #d26b61; }
 
 .camera-actions {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: .65rem;
+  min-height: 82px;
 }
+
 .camera-actions .secondary-button {
   color: white;
   border-color: rgb(255 255 255 / 30%);
   background: rgb(255 255 255 / 10%);
   text-align: center;
 }
+
 .camera-file-button { position: relative; overflow: hidden; }
 .camera-file-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
 .capture-button {
   width: 76px;
   height: 76px;
@@ -231,7 +360,10 @@
   background: transparent;
   display: grid;
   place-items: center;
+  box-shadow: 0 0 0 0 rgb(143 209 158 / 0%);
 }
+
+.capture-button.ready { box-shadow: 0 0 0 7px rgb(143 209 158 / 45%); }
 .capture-button span { width: 58px; height: 58px; border-radius: 50%; background: white; }
 
 .tour-count {
@@ -261,9 +393,10 @@
   overflow: hidden;
   background: var(--surface-muted);
 }
+
 .tour-frame img { width: 100%; aspect-ratio: 4 / 3; display: block; object-fit: cover; }
 .tour-frame div { display: flex; align-items: center; gap: .55rem; padding: .55rem; }
-.tour-frame strong { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--green-700); color: white; }
+.tour-frame strong { min-width: 42px; height: 28px; border-radius: 999px; display: grid; place-items: center; background: var(--green-700); color: white; font-size: .78rem; }
 .tour-frame span { color: var(--text-muted); font-size: .8rem; }
 
 @media (max-width: 600px) {
@@ -271,7 +404,26 @@
   .base-layer-toggle { width: 100%; }
   .base-layer-toggle button { flex: 1; }
   .aerial-overview-map { min-height: 330px; }
+  .survey-plan { grid-template-columns: 1fr; }
+  .survey-plan > div { min-height: 52px; }
   .tour-strip { grid-auto-columns: 78%; }
-  .camera-actions { grid-template-columns: 1fr auto 1fr; }
-  .camera-actions .secondary-button { padding-inline: .5rem; font-size: .78rem; }
+  .guided-camera { gap: .4rem; padding-inline: .4rem; }
+  .guided-camera-header { padding-inline: .25rem; }
+  .guided-camera-header strong { font-size: .95rem; }
+  .virtual-capture-guide { top: .55rem; left: .55rem; right: .55rem; padding: .58rem .62rem; }
+  .guide-arrow { width: 40px; height: 40px; font-size: 1.45rem; }
+  .virtual-capture-guide p { font-size: .76rem; }
+  .camera-actions { gap: .45rem; min-height: 76px; }
+  .camera-actions .secondary-button { padding-inline: .35rem; font-size: .74rem; }
+  .capture-button { width: 70px; height: 70px; }
+  .capture-button span { width: 52px; height: 52px; }
+}
+
+@media (max-height: 720px) {
+  .virtual-capture-guide p { display: none; }
+  .guided-camera .status-message { max-height: 58px; overflow-y: auto; }
+  .capture-quality { display: none; }
+  .camera-actions { min-height: 70px; }
+  .capture-button { width: 64px; height: 64px; }
+  .capture-button span { width: 48px; height: 48px; }
 }
