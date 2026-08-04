@@ -111,20 +111,59 @@ body.aerial-editor-open .bottom-nav {
   gap: .6rem;
 }
 
-.aerial-editor-controls label,
-.aerial-existing-editor label {
+.aerial-editor-controls label {
   display: grid;
   gap: .35rem;
   font-weight: 700;
 }
 
-.aerial-existing-editor {
+.aerial-selection-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  min-height: 62px;
+  padding: .7rem .8rem;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: var(--surface-muted);
+}
+
+.aerial-selection-card.selected {
+  border: 2px solid #d6a92b;
+  background: #fff8d9;
+}
+
+.aerial-selection-card p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.aerial-selection-card > div {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: .6rem;
-  padding-top: .75rem;
-  border-top: 1px solid var(--border);
+  gap: .12rem;
+}
+
+.aerial-selection-card span {
+  color: #7d6418;
+  font-size: .75rem;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.aerial-selection-card strong {
+  color: var(--green-900);
+  font-size: 1rem;
+}
+
+.aerial-selection-card small {
+  color: var(--text-muted);
+}
+
+.aerial-selection-card button {
+  flex: 0 0 auto;
 }
 
 .aerial-drawing-actions {
@@ -188,7 +227,8 @@ body.aerial-editor-open .bottom-nav {
   .aerial-editor-panel { max-height: 48dvh; }
   .aerial-editor-controls { grid-template-columns: 1fr 1fr; }
   .aerial-editor-controls .primary-button { grid-column: 1 / -1; }
-  .aerial-existing-editor { grid-template-columns: 1fr; }
+  .aerial-selection-card { align-items: stretch; flex-direction: column; }
+  .aerial-selection-card button { width: 100%; }
   .aerial-drawing-actions > * { flex: 1; }
   .aerial-drawing-actions strong { flex-basis: 100%; }
   .aerial-vertex-list { grid-template-columns: 1fr 1fr; }
