@@ -96,8 +96,6 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
   const [featureType, setFeatureType] = useState<FeatureType>('garden_boundary');
   const [drawingKind, setDrawingKind] = useState<DrawingKind>('Polygon');
   const [drawing, setDrawing] = useState<DrawingState | null>(null);
-  const [pendingGeometry, setPendingGeometry] = useState<GardenGeometry | null>(null);
-  const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -113,6 +111,12 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
   useEffect(() => { baseLayerRef.current = baseLayer; }, [baseLayer]);
   useEffect(() => { gardenDataRef.current = gardenData; }, [gardenData]);
   useEffect(() => { previewDataRef.current = previewData; }, [previewData]);
+
+  useEffect(() => {
+    if (!open) return;
+    document.body.classList.add('aerial-editor-open');
+    return () => { document.body.classList.remove('aerial-editor-open'); };
+  }, [open]);
 
   useEffect(() => {
     let cancelled = false;
@@ -180,9 +184,7 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
       if (!current) return;
       const position: Position = [event.lngLat.lng, event.lngLat.lat];
       if (current.kind === 'Point') {
-        setPendingGeometry({ type: 'Point', coordinates: position });
-        setName(FEATURE_TYPE_LABELS[current.type]);
-        setDrawing(null);
+        setDrawing({ ...current, coordinates: [position] });
         return;
       }
       setDrawing((latest) => latest
@@ -216,41 +218,35 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
   }, [previewData]);
 
   function startDrawing() {
-    setPendingGeometry(null);
     setMessage('Tryk på luftfotoet for at placere punkter.');
     setDrawing({ type: featureType, kind: drawingKind, coordinates: [] });
   }
 
-  function finishDrawing() {
-    if (!drawing) return;
+  async function finishDrawing() {
+    if (!drawing || busy) return;
     const geometry = geometryFromDrawing(drawing);
     if (!geometry) {
-      setMessage(drawing.kind === 'LineString'
-        ? 'En linje kræver mindst to punkter.'
-        : 'Et område kræver mindst tre punkter.');
+      setMessage(drawing.kind === 'Point'
+        ? 'Placér punktet på kortet først.'
+        : drawing.kind === 'LineString'
+          ? 'En linje kræver mindst to punkter.'
+          : 'Et område kræver mindst tre punkter.');
       return;
     }
-    setPendingGeometry(geometry);
-    setName(FEATURE_TYPE_LABELS[drawing.type]);
-    setDrawing(null);
-  }
 
-  async function saveFeature(event: React.FormEvent) {
-    event.preventDefault();
-    if (!pendingGeometry) return;
     setBusy(true);
-    setMessage('');
+    setMessage('Gemmer markeringen…');
     try {
       const response = await api.createFeature(garden.id, {
-        type: featureType,
-        name,
+        type: drawing.type,
+        name: FEATURE_TYPE_LABELS[drawing.type],
         description: '',
         confidence: 'unknown',
-        geometry: pendingGeometry,
+        geometry,
       });
       onGardenChanged({ ...garden, features: [...garden.features, response.feature] });
-      setPendingGeometry(null);
-      setMessage('Objektet er gemt. Du kan tegne det næste med det samme.');
+      setDrawing(null);
+      setMessage(`${FEATURE_TYPE_LABELS[drawing.type]} er gemt. Du kan tegne det næste objekt.`);
     } catch (caught) {
       setMessage(caught instanceof ApiError ? caught.message : 'Objektet kunne ikke gemmes.');
     } finally {
@@ -258,9 +254,15 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
     }
   }
 
-  function closeEditor() {
+  function cancelDrawing() {
+    if (busy) return;
     setDrawing(null);
-    setPendingGeometry(null);
+    setMessage('Tegningen blev annulleret.');
+  }
+
+  function closeEditor() {
+    if (busy) return;
+    setDrawing(null);
     setMessage('');
     setOpen(false);
   }
@@ -272,7 +274,7 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
         <div className="aerial-editor" role="dialog" aria-modal="true" aria-label="Tegn haven på luftfoto">
           <header className="aerial-editor-header">
             <div><p className="eyebrow">Assisteret kortlægning</p><strong>Tegn direkte på haven</strong></div>
-            <button type="button" onClick={closeEditor} aria-label="Luk luftfotoeditor">×</button>
+            <button type="button" onClick={closeEditor} disabled={busy} aria-label="Luk luftfotoeditor">×</button>
           </header>
           <div ref={containerRef} className="aerial-editor-map" />
           <div className="aerial-editor-layer-toggle" aria-label="Vælg kortbaggrund">
@@ -282,7 +284,7 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
           <section className="aerial-editor-panel">
             {message && <StatusMessage>{message}</StatusMessage>}
             {!aerialAvailable && <p className="field-help">Luftfoto kræver Datafordeler-nøglen. Du kan stadig tegne på standardkortet.</p>}
-            {!drawing && !pendingGeometry && (
+            {!drawing && (
               <div className="aerial-editor-controls">
                 <label>Objekt<select value={featureType} onChange={(event) => setFeatureType(event.target.value as FeatureType)}>{FEATURE_TYPES.map((type) => <option key={type} value={type}>{FEATURE_TYPE_LABELS[type]}</option>)}</select></label>
                 <label>Form<select value={drawingKind} onChange={(event) => setDrawingKind(event.target.value as DrawingKind)}><option value="Polygon">Område</option><option value="LineString">Linje</option><option value="Point">Punkt</option></select></label>
@@ -292,17 +294,10 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
             {drawing && (
               <div className="aerial-drawing-actions">
                 <strong>{drawing.coordinates.length} punkt{drawing.coordinates.length === 1 ? '' : 'er'}</strong>
-                <button type="button" className="secondary-button" disabled={drawing.coordinates.length === 0} onClick={() => setDrawing((current) => current ? { ...current, coordinates: current.coordinates.slice(0, -1) } : current)}>Fortryd punkt</button>
-                <button type="button" className="secondary-button" onClick={() => setDrawing(null)}>Annuller</button>
-                {drawing.kind !== 'Point' && <button type="button" className="primary-button" onClick={finishDrawing}>Færdig</button>}
+                <button type="button" className="secondary-button" disabled={busy || drawing.coordinates.length === 0} onClick={() => setDrawing((current) => current ? { ...current, coordinates: current.coordinates.slice(0, -1) } : current)}>Fortryd punkt</button>
+                <button type="button" className="secondary-button" disabled={busy} onClick={cancelDrawing}>Annuller</button>
+                <button type="button" className="primary-button" disabled={busy} onClick={() => void finishDrawing()}>{busy ? 'Gemmer…' : 'Færdig'}</button>
               </div>
-            )}
-            {pendingGeometry && (
-              <form className="aerial-save-form" onSubmit={saveFeature}>
-                <label>Navn<input required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} /></label>
-                <button className="secondary-button" type="button" onClick={() => setPendingGeometry(null)}>Tegn igen</button>
-                <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Gemmer…' : 'Gem objekt'}</button>
-              </form>
             )}
           </section>
         </div>
