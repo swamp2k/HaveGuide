@@ -1,0 +1,46 @@
+.header-garden-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .45rem;
+  min-width: 0;
+}
+
+.header-settings-button {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+}
+
+.header-settings-button:hover,
+.header-settings-button.active {
+  border-color: var(--border);
+  background: var(--green-100);
+  color: var(--green-900);
+}
+
+.bottom-nav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+body.guided-camera-open {
+  overflow: hidden;
+}
+
+body.guided-camera-open .bottom-nav {
+  display: none;
+}
+
+@media (max-width: 520px) {
+  .app-header { gap: .4rem; }
+  .header-brand strong { font-size: 1rem; }
+  .header-settings-button { width: 40px; height: 40px; }
+  .garden-name { max-width: 9rem; }
+}
