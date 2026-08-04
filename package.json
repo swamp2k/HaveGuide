@@ -16,8 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "db:migrate:local": "wrangler d1 migrations apply have-guide-local --local",
-    "db:migrate:remote": "wrangler d1 migrations apply have-guide --remote",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
