@@ -12,19 +12,19 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "have-guide-local",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_name": "haveguide",
+      "database_id": "414945bc-ad9e-484e-bfa6-59a05980b6cc",
       "migrations_dir": "migrations"
     }
   ],
   "r2_buckets": [
     {
       "binding": "MEDIA",
-      "bucket_name": "have-guide-media-local"
+      "bucket_name": "haveguide"
     }
   ],
   "vars": {
-    "APP_ENV": "development",
+    "APP_ENV": "production",
     "SESSION_DAYS": "30",
     "MAX_UPLOAD_MB": "12"
   },
