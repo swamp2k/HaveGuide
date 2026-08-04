@@ -106,15 +106,20 @@ body.aerial-editor-open .bottom-nav {
 
 .aerial-editor-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, .85fr) minmax(170px, 1.3fr) auto;
   align-items: end;
   gap: .6rem;
 }
 
-.aerial-editor-controls label {
+.aerial-editor-controls label,
+.aerial-edit-name {
   display: grid;
   gap: .35rem;
   font-weight: 700;
+}
+
+.aerial-edit-name {
+  width: min(100%, 520px);
 }
 
 .aerial-selection-card {
@@ -222,11 +227,20 @@ body.aerial-editor-open .bottom-nav {
   font-weight: 750;
 }
 
+@media (max-width: 900px) {
+  .aerial-editor-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .aerial-name-field,
+  .aerial-editor-controls .primary-button {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 620px) {
   .aerial-editor-launch { top: .55rem; left: .55rem; font-size: .82rem; }
   .aerial-editor-panel { max-height: 48dvh; }
-  .aerial-editor-controls { grid-template-columns: 1fr 1fr; }
-  .aerial-editor-controls .primary-button { grid-column: 1 / -1; }
   .aerial-selection-card { align-items: stretch; flex-direction: column; }
   .aerial-selection-card button { width: 100%; }
   .aerial-drawing-actions > * { flex: 1; }
