@@ -19,7 +19,20 @@ interface AerialEditorProps {
 
 type DrawingKind = 'Point' | 'LineString' | 'Polygon';
 type BaseLayer = 'map' | 'aerial';
-interface DrawingState { type: FeatureType; kind: DrawingKind; coordinates: Position[]; featureId?: string; }
+
+interface DrawingVertex {
+  id: string;
+  label: number;
+  position: Position;
+}
+
+interface DrawingState {
+  type: FeatureType;
+  kind: DrawingKind;
+  name: string;
+  vertices: DrawingVertex[];
+  featureId?: string;
+}
 
 const emptyCollection = { type: 'FeatureCollection' as const, features: [] };
 const mapStyle: StyleSpecification = {
@@ -58,50 +71,75 @@ function toFeatureCollection(features: GardenFeature[], hiddenId?: string) {
   };
 }
 
+function positionsOf(drawing: DrawingState): Position[] {
+  return drawing.vertices.map((vertex) => vertex.position);
+}
+
 function geometryFromDrawing(drawing: DrawingState): GardenGeometry | null {
+  const positions = positionsOf(drawing);
   if (drawing.kind === 'Point') {
-    return drawing.coordinates[0] ? { type: 'Point', coordinates: drawing.coordinates[0] } : null;
+    return positions[0] ? { type: 'Point', coordinates: positions[0] } : null;
   }
   if (drawing.kind === 'LineString') {
-    return drawing.coordinates.length >= 2 ? { type: 'LineString', coordinates: drawing.coordinates } : null;
+    return positions.length >= 2 ? { type: 'LineString', coordinates: positions } : null;
   }
-  return drawing.coordinates.length >= 3
-    ? { type: 'Polygon', coordinates: [closePolygon(drawing.coordinates)] }
+  return positions.length >= 3
+    ? { type: 'Polygon', coordinates: [closePolygon(positions)] }
     : null;
+}
+
+function makeVertices(positions: Position[]): DrawingVertex[] {
+  return positions.map((position, index) => ({
+    id: crypto.randomUUID(),
+    label: index + 1,
+    position,
+  }));
 }
 
 function drawingFromFeature(feature: GardenFeature): DrawingState {
   if (feature.geometry.type === 'Point') {
-    return { type: feature.type, kind: 'Point', coordinates: [feature.geometry.coordinates], featureId: feature.id };
+    return {
+      type: feature.type,
+      kind: 'Point',
+      name: feature.name,
+      vertices: makeVertices([feature.geometry.coordinates]),
+      featureId: feature.id,
+    };
   }
   if (feature.geometry.type === 'LineString') {
-    return { type: feature.type, kind: 'LineString', coordinates: feature.geometry.coordinates, featureId: feature.id };
+    return {
+      type: feature.type,
+      kind: 'LineString',
+      name: feature.name,
+      vertices: makeVertices(feature.geometry.coordinates),
+      featureId: feature.id,
+    };
   }
   return {
     type: feature.type,
     kind: 'Polygon',
-    coordinates: feature.geometry.coordinates[0]?.slice(0, -1) ?? [],
+    name: feature.name,
+    vertices: makeVertices(feature.geometry.coordinates[0]?.slice(0, -1) ?? []),
     featureId: feature.id,
   };
 }
 
 function previewCollection(drawing: DrawingState | null) {
-  if (!drawing) return emptyCollection;
-  const geometry = geometryFromDrawing(drawing);
-  if (geometry) {
-    return {
-      type: 'FeatureCollection' as const,
-      features: [{ type: 'Feature' as const, id: 'drawing-preview', geometry, properties: {} }],
-    };
+  if (!drawing || drawing.vertices.length === 0) return emptyCollection;
+  const positions = positionsOf(drawing);
+
+  let geometry: GardenGeometry;
+  if (drawing.kind === 'Point' || positions.length === 1) {
+    geometry = { type: 'Point', coordinates: positions[0] };
+  } else if (drawing.kind === 'LineString' || positions.length === 2) {
+    geometry = { type: 'LineString', coordinates: positions };
+  } else {
+    geometry = { type: 'Polygon', coordinates: [closePolygon(positions)] };
   }
+
   return {
     type: 'FeatureCollection' as const,
-    features: drawing.coordinates.map((coordinates, index) => ({
-      type: 'Feature' as const,
-      id: `vertex-${index}`,
-      geometry: { type: 'Point' as const, coordinates },
-      properties: {},
-    })),
+    features: [{ type: 'Feature' as const, id: 'drawing-preview', geometry, properties: {} }],
   };
 }
 
@@ -111,6 +149,7 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
   const [baseLayer, setBaseLayer] = useState<BaseLayer>('map');
   const [featureType, setFeatureType] = useState<FeatureType>('garden_boundary');
   const [drawingKind, setDrawingKind] = useState<DrawingKind>('Polygon');
+  const [newObjectName, setNewObjectName] = useState(FEATURE_TYPE_LABELS.garden_boundary);
   const [drawing, setDrawing] = useState<DrawingState | null>(null);
   const [selectedFeatureId, setSelectedFeatureId] = useState('');
   const [busy, setBusy] = useState(false);
@@ -132,6 +171,7 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
     [drawing, selectedFeature],
   );
   const previewData = useMemo(() => previewCollection(drawing), [drawing]);
+  const vertexSignature = drawing?.vertices.map((vertex) => vertex.id).join('|') ?? '';
   const gardenDataRef = useRef(gardenData);
   const selectedDataRef = useRef(selectedData);
   const previewDataRef = useRef(previewData);
@@ -241,18 +281,21 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
         id: 'aerial-preview-fill',
         type: 'fill',
         source: 'aerial-editor-preview',
-        paint: { 'fill-color': '#d69935', 'fill-opacity': 0.3 },
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': '#d69935', 'fill-opacity': 0.34 },
       });
       map.addLayer({
         id: 'aerial-preview-line',
         type: 'line',
         source: 'aerial-editor-preview',
+        filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]],
         paint: { 'line-color': '#ffd56c', 'line-width': 4, 'line-dasharray': [2, 1] },
       });
       map.addLayer({
         id: 'aerial-preview-point',
         type: 'circle',
         source: 'aerial-editor-preview',
+        filter: ['==', ['geometry-type'], 'Point'],
         paint: {
           'circle-radius': 7,
           'circle-color': '#ffd56c',
@@ -268,12 +311,22 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
         if (current.featureId) return;
         const position: Position = [event.lngLat.lng, event.lngLat.lat];
         if (current.kind === 'Point') {
-          setDrawing({ ...current, coordinates: [position] });
+          const existingVertex = current.vertices[0];
+          setDrawing({
+            ...current,
+            vertices: [{
+              id: existingVertex?.id ?? crypto.randomUUID(),
+              label: existingVertex?.label ?? 1,
+              position,
+            }],
+          });
           return;
         }
-        setDrawing((latest) => latest
-          ? { ...latest, coordinates: [...latest.coordinates, position] }
-          : latest);
+        const nextLabel = current.vertices.reduce((maximum, vertex) => Math.max(maximum, vertex.label), 0) + 1;
+        setDrawing({
+          ...current,
+          vertices: [...current.vertices, { id: crypto.randomUUID(), label: nextLabel, position }],
+        });
         return;
       }
 
@@ -291,7 +344,7 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
         .find((feature) => typeof feature.properties?.id === 'string');
       const featureId = typeof hit?.properties?.id === 'string' ? hit.properties.id : '';
       setSelectedFeatureId(featureId);
-      setMessage(featureId ? 'Objektet er valgt. Tryk Rediger for at ændre formen.' : '');
+      setMessage(featureId ? 'Objektet er valgt. Tryk Rediger for at ændre form eller navn.' : '');
     });
 
     map.on('mousemove', (event) => {
@@ -354,19 +407,21 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
     const map = mapRef.current;
     if (!map || !drawing) return;
 
-    markersRef.current = drawing.coordinates.map((position, index) => {
+    markersRef.current = drawing.vertices.map((vertex) => {
       const element = document.createElement('button');
       element.type = 'button';
       element.className = 'aerial-vertex-marker';
-      element.textContent = String(index + 1);
-      element.setAttribute('aria-label', `Flyt punkt ${index + 1}`);
-      const marker = new maplibregl.Marker({ element, draggable: true }).setLngLat(position).addTo(map);
+      element.textContent = String(vertex.label);
+      element.setAttribute('aria-label', `Flyt punkt ${vertex.label}`);
+      const marker = new maplibregl.Marker({ element, draggable: true }).setLngLat(vertex.position).addTo(map);
       marker.on('dragend', () => {
         const next = marker.getLngLat();
         setDrawing((current) => current ? {
           ...current,
-          coordinates: current.coordinates.map((coordinate, currentIndex) =>
-            currentIndex === index ? [next.lng, next.lat] : coordinate,
+          vertices: current.vertices.map((candidate) =>
+            candidate.id === vertex.id
+              ? { ...candidate, position: [next.lng, next.lat] }
+              : candidate,
           ),
         } : current);
       });
@@ -377,12 +432,27 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
       for (const marker of markersRef.current) marker.remove();
       markersRef.current = [];
     };
-  }, [drawing?.coordinates.length, drawing?.featureId]);
+  }, [vertexSignature, drawing?.featureId]);
+
+  function changeFeatureType(nextType: FeatureType) {
+    setFeatureType(nextType);
+    setNewObjectName((currentName) => {
+      const currentDefault = FEATURE_TYPE_LABELS[featureType];
+      return !currentName.trim() || currentName === currentDefault
+        ? FEATURE_TYPE_LABELS[nextType]
+        : currentName;
+    });
+  }
 
   function startDrawing() {
+    const name = newObjectName.trim();
+    if (!name) {
+      setMessage('Giv objektet et navn først.');
+      return;
+    }
     setSelectedFeatureId('');
-    setMessage('Tryk på luftfotoet for at placere punkter. Punkterne kan trækkes bagefter.');
-    setDrawing({ type: featureType, kind: drawingKind, coordinates: [] });
+    setMessage('Tryk på luftfotoet for at placere punkter. Området vises løbende, og punkterne kan trækkes bagefter.');
+    setDrawing({ type: featureType, kind: drawingKind, name, vertices: [] });
   }
 
   function editExisting() {
@@ -392,7 +462,7 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
     setDrawingKind(feature.geometry.type);
     setDrawing(drawingFromFeature(feature));
     setSelectedFeatureId('');
-    setMessage(`Redigerer ${feature.name}. Træk eller slet punkter og tryk Gem ændringer.`);
+    setMessage(`Redigerer ${feature.name}. Træk eller slet punkter, ret navnet og gem ændringerne.`);
     const geometry = feature.geometry;
     const first = geometry.type === 'Point'
       ? geometry.coordinates
@@ -402,16 +472,52 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
     if (first) mapRef.current?.easeTo({ center: first, zoom: Math.max(mapRef.current.getZoom(), 19) });
   }
 
-  function removeVertex(index: number) {
-    if (busy) return;
-    setDrawing((current) => current ? {
-      ...current,
-      coordinates: current.coordinates.filter((_, currentIndex) => currentIndex !== index),
-    } : current);
+  async function removeVertex(vertexId: string) {
+    if (!drawing || busy) return;
+
+    if (drawing.vertices.length > 1) {
+      setDrawing({
+        ...drawing,
+        vertices: drawing.vertices.filter((vertex) => vertex.id !== vertexId),
+      });
+      return;
+    }
+
+    if (!drawing.featureId) {
+      setDrawing(null);
+      setMessage('Den tomme tegning blev fjernet.');
+      return;
+    }
+
+    const existing = garden.features.find((feature) => feature.id === drawing.featureId);
+    if (!existing) return;
+    if (!window.confirm(`Slet hele “${existing.name}”?`)) return;
+
+    setBusy(true);
+    setMessage('Sletter objektet…');
+    try {
+      await api.deleteFeature(garden.id, existing.id);
+      onGardenChanged({
+        ...garden,
+        features: garden.features.filter((feature) => feature.id !== existing.id),
+      });
+      setDrawing(null);
+      setSelectedFeatureId('');
+      setMessage(`${existing.name} er slettet.`);
+    } catch (caught) {
+      setMessage(caught instanceof ApiError ? caught.message : 'Objektet kunne ikke slettes.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function finishDrawing() {
     if (!drawing || busy) return;
+    const name = drawing.name.trim();
+    if (!name) {
+      setMessage('Objektet skal have et navn.');
+      return;
+    }
     const geometry = geometryFromDrawing(drawing);
     if (!geometry) {
       setMessage(drawing.kind === 'Point'
@@ -429,7 +535,7 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
         const existing = garden.features.find((item) => item.id === drawing.featureId);
         if (!existing) throw new Error('Objektet findes ikke længere.');
         const response = await api.updateFeature(garden.id, existing.id, {
-          name: existing.name,
+          name,
           description: existing.description,
           confidence: existing.confidence,
           geometry,
@@ -439,18 +545,19 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
           features: garden.features.map((item) => item.id === existing.id ? response.feature : item),
         });
         setSelectedFeatureId(existing.id);
-        setMessage(`${existing.name} er opdateret.`);
+        setMessage(`${name} er opdateret.`);
       } else {
         const response = await api.createFeature(garden.id, {
           type: drawing.type,
-          name: FEATURE_TYPE_LABELS[drawing.type],
+          name,
           description: '',
           confidence: 'unknown',
           geometry,
         });
         onGardenChanged({ ...garden, features: [...garden.features, response.feature] });
         setSelectedFeatureId(response.feature.id);
-        setMessage(`${FEATURE_TYPE_LABELS[drawing.type]} er gemt.`);
+        setNewObjectName(FEATURE_TYPE_LABELS[drawing.type]);
+        setMessage(`${name} er gemt.`);
       }
       setDrawing(null);
     } catch (caught) {
@@ -466,6 +573,12 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
     setDrawing(null);
     setSelectedFeatureId(previousFeatureId);
     setMessage('Redigeringen blev annulleret.');
+  }
+
+  function undoLastVertex() {
+    if (!drawing || drawing.vertices.length === 0) return;
+    const lastVertex = drawing.vertices[drawing.vertices.length - 1];
+    void removeVertex(lastVertex.id);
   }
 
   function closeEditor() {
@@ -496,8 +609,9 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
             {!drawing && (
               <div className="aerial-editor-home">
                 <div className="aerial-editor-controls">
-                  <label>Objekt<select value={featureType} onChange={(event) => setFeatureType(event.target.value as FeatureType)}>{FEATURE_TYPES.map((type) => <option key={type} value={type}>{FEATURE_TYPE_LABELS[type]}</option>)}</select></label>
+                  <label>Objekt<select value={featureType} onChange={(event) => changeFeatureType(event.target.value as FeatureType)}>{FEATURE_TYPES.map((type) => <option key={type} value={type}>{FEATURE_TYPE_LABELS[type]}</option>)}</select></label>
                   <label>Form<select value={drawingKind} onChange={(event) => setDrawingKind(event.target.value as DrawingKind)}><option value="Polygon">Område</option><option value="LineString">Linje</option><option value="Point">Punkt</option></select></label>
+                  <label className="aerial-name-field">Navn<input required maxLength={120} value={newObjectName} onChange={(event) => setNewObjectName(event.target.value)} placeholder="Fx Det gamle æbletræ" /></label>
                   <button className="primary-button" type="button" onClick={startDrawing}>Tegn nyt</button>
                 </div>
 
@@ -519,16 +633,17 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
             )}
             {drawing && (
               <div className="aerial-edit-workspace">
+                <label className="aerial-edit-name">Navn<input required maxLength={120} value={drawing.name} onChange={(event) => setDrawing((current) => current ? { ...current, name: event.target.value } : current)} /></label>
                 <div className="aerial-drawing-actions">
-                  <strong>{drawing.featureId ? 'Redigerer eksisterende objekt' : 'Nyt objekt'} · {drawing.coordinates.length} punkt{drawing.coordinates.length === 1 ? '' : 'er'}</strong>
-                  {!drawing.featureId && <button type="button" className="secondary-button" disabled={busy || drawing.coordinates.length === 0} onClick={() => setDrawing((current) => current ? { ...current, coordinates: current.coordinates.slice(0, -1) } : current)}>Fortryd sidste</button>}
+                  <strong>{drawing.featureId ? 'Redigerer eksisterende objekt' : 'Nyt objekt'} · {drawing.vertices.length} punkt{drawing.vertices.length === 1 ? '' : 'er'}</strong>
+                  {!drawing.featureId && <button type="button" className="secondary-button" disabled={busy || drawing.vertices.length === 0} onClick={undoLastVertex}>Fortryd sidste</button>}
                   <button type="button" className="secondary-button" disabled={busy} onClick={cancelDrawing}>Annuller</button>
                   <button type="button" className="primary-button" disabled={busy} onClick={() => void finishDrawing()}>{busy ? 'Gemmer…' : drawing.featureId ? 'Gem ændringer' : 'Færdig'}</button>
                 </div>
-                {drawing.coordinates.length > 0 && (
+                {drawing.vertices.length > 0 && (
                   <div className="aerial-vertex-list" aria-label="Punkter i objektet">
-                    {drawing.coordinates.map((_, index) => (
-                      <div key={index}><span>Punkt {index + 1}</span><button type="button" disabled={busy} onClick={() => removeVertex(index)}>Slet</button></div>
+                    {drawing.vertices.map((vertex) => (
+                      <div key={vertex.id}><span>Punkt {vertex.label}</span><button type="button" disabled={busy} onClick={() => void removeVertex(vertex.id)}>Slet</button></div>
                     ))}
                   </div>
                 )}
