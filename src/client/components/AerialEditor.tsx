@@ -120,15 +120,26 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
   const markersRef = useRef<Marker[]>([]);
   const drawingRef = useRef<DrawingState | null>(null);
   const baseLayerRef = useRef<BaseLayer>('map');
+
   const hiddenFeatureId = drawing?.featureId;
-  const gardenData = useMemo(() => toFeatureCollection(garden.features, hiddenFeatureId), [garden.features, hiddenFeatureId]);
+  const selectedFeature = garden.features.find((feature) => feature.id === selectedFeatureId) ?? null;
+  const gardenData = useMemo(
+    () => toFeatureCollection(garden.features, hiddenFeatureId),
+    [garden.features, hiddenFeatureId],
+  );
+  const selectedData = useMemo(
+    () => toFeatureCollection(!drawing && selectedFeature ? [selectedFeature] : []),
+    [drawing, selectedFeature],
+  );
   const previewData = useMemo(() => previewCollection(drawing), [drawing]);
   const gardenDataRef = useRef(gardenData);
+  const selectedDataRef = useRef(selectedData);
   const previewDataRef = useRef(previewData);
 
   useEffect(() => { drawingRef.current = drawing; }, [drawing]);
   useEffect(() => { baseLayerRef.current = baseLayer; }, [baseLayer]);
   useEffect(() => { gardenDataRef.current = gardenData; }, [gardenData]);
+  useEffect(() => { selectedDataRef.current = selectedData; }, [selectedData]);
   useEffect(() => { previewDataRef.current = previewData; }, [previewData]);
 
   useEffect(() => {
@@ -168,25 +179,141 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
       const layer = baseLayerRef.current;
       map.setLayoutProperty('aerial-editor-osm', 'visibility', layer === 'map' ? 'visible' : 'none');
       map.setLayoutProperty('aerial-editor-orthophoto', 'visibility', layer === 'aerial' ? 'visible' : 'none');
+
       map.addSource('aerial-editor-garden', { type: 'geojson', data: gardenDataRef.current });
-      map.addLayer({ id: 'aerial-existing-fill', type: 'fill', source: 'aerial-editor-garden', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#3f795b', 'fill-opacity': 0.22 } });
-      map.addLayer({ id: 'aerial-existing-line', type: 'line', source: 'aerial-editor-garden', filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]], paint: { 'line-color': '#ffffff', 'line-width': 3 } });
-      map.addLayer({ id: 'aerial-existing-point', type: 'circle', source: 'aerial-editor-garden', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 7, 'circle-color': '#d69935', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 } });
+      map.addLayer({
+        id: 'aerial-existing-fill',
+        type: 'fill',
+        source: 'aerial-editor-garden',
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': '#3f795b', 'fill-opacity': 0.22 },
+      });
+      map.addLayer({
+        id: 'aerial-existing-line',
+        type: 'line',
+        source: 'aerial-editor-garden',
+        filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]],
+        paint: { 'line-color': '#ffffff', 'line-width': 3 },
+      });
+      map.addLayer({
+        id: 'aerial-existing-point',
+        type: 'circle',
+        source: 'aerial-editor-garden',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#d69935',
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 2,
+        },
+      });
+
+      map.addSource('aerial-editor-selected', { type: 'geojson', data: selectedDataRef.current });
+      map.addLayer({
+        id: 'aerial-selected-fill',
+        type: 'fill',
+        source: 'aerial-editor-selected',
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': '#ffd56c', 'fill-opacity': 0.42 },
+      });
+      map.addLayer({
+        id: 'aerial-selected-line',
+        type: 'line',
+        source: 'aerial-editor-selected',
+        filter: ['in', ['geometry-type'], ['literal', ['LineString', 'Polygon']]],
+        paint: { 'line-color': '#ffd56c', 'line-width': 7 },
+      });
+      map.addLayer({
+        id: 'aerial-selected-point',
+        type: 'circle',
+        source: 'aerial-editor-selected',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius': 12,
+          'circle-color': '#ffd56c',
+          'circle-stroke-color': '#173e2b',
+          'circle-stroke-width': 4,
+        },
+      });
+
       map.addSource('aerial-editor-preview', { type: 'geojson', data: previewDataRef.current });
-      map.addLayer({ id: 'aerial-preview-fill', type: 'fill', source: 'aerial-editor-preview', paint: { 'fill-color': '#d69935', 'fill-opacity': 0.3 } });
-      map.addLayer({ id: 'aerial-preview-line', type: 'line', source: 'aerial-editor-preview', paint: { 'line-color': '#ffd56c', 'line-width': 4, 'line-dasharray': [2, 1] } });
-      map.addLayer({ id: 'aerial-preview-point', type: 'circle', source: 'aerial-editor-preview', paint: { 'circle-radius': 7, 'circle-color': '#ffd56c', 'circle-stroke-color': '#173e2b', 'circle-stroke-width': 2 } });
+      map.addLayer({
+        id: 'aerial-preview-fill',
+        type: 'fill',
+        source: 'aerial-editor-preview',
+        paint: { 'fill-color': '#d69935', 'fill-opacity': 0.3 },
+      });
+      map.addLayer({
+        id: 'aerial-preview-line',
+        type: 'line',
+        source: 'aerial-editor-preview',
+        paint: { 'line-color': '#ffd56c', 'line-width': 4, 'line-dasharray': [2, 1] },
+      });
+      map.addLayer({
+        id: 'aerial-preview-point',
+        type: 'circle',
+        source: 'aerial-editor-preview',
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#ffd56c',
+          'circle-stroke-color': '#173e2b',
+          'circle-stroke-width': 2,
+        },
+      });
     });
+
     map.on('click', (event) => {
       const current = drawingRef.current;
-      if (!current || current.featureId) return;
-      const position: Position = [event.lngLat.lng, event.lngLat.lat];
-      if (current.kind === 'Point') {
-        setDrawing({ ...current, coordinates: [position] });
+      if (current) {
+        if (current.featureId) return;
+        const position: Position = [event.lngLat.lng, event.lngLat.lat];
+        if (current.kind === 'Point') {
+          setDrawing({ ...current, coordinates: [position] });
+          return;
+        }
+        setDrawing((latest) => latest
+          ? { ...latest, coordinates: [...latest.coordinates, position] }
+          : latest);
         return;
       }
-      setDrawing((latest) => latest ? { ...latest, coordinates: [...latest.coordinates, position] } : latest);
+
+      const selectableLayers = [
+        'aerial-existing-point',
+        'aerial-existing-line',
+        'aerial-existing-fill',
+      ].filter((layerId) => map.getLayer(layerId));
+      const padding = 12;
+      const hitBox: [[number, number], [number, number]] = [
+        [event.point.x - padding, event.point.y - padding],
+        [event.point.x + padding, event.point.y + padding],
+      ];
+      const hit = map.queryRenderedFeatures(hitBox, { layers: selectableLayers })
+        .find((feature) => typeof feature.properties?.id === 'string');
+      const featureId = typeof hit?.properties?.id === 'string' ? hit.properties.id : '';
+      setSelectedFeatureId(featureId);
+      setMessage(featureId ? 'Objektet er valgt. Tryk Rediger for at ændre formen.' : '');
     });
+
+    map.on('mousemove', (event) => {
+      if (drawingRef.current) {
+        map.getCanvas().style.cursor = drawingRef.current.featureId ? '' : 'crosshair';
+        return;
+      }
+      const padding = 8;
+      const hitBox: [[number, number], [number, number]] = [
+        [event.point.x - padding, event.point.y - padding],
+        [event.point.x + padding, event.point.y + padding],
+      ];
+      const selectableLayers = [
+        'aerial-existing-point',
+        'aerial-existing-line',
+        'aerial-existing-fill',
+      ].filter((layerId) => map.getLayer(layerId));
+      map.getCanvas().style.cursor = map.queryRenderedFeatures(hitBox, { layers: selectableLayers }).length > 0
+        ? 'pointer'
+        : '';
+    });
+
     mapRef.current = map;
     return () => {
       for (const marker of markersRef.current) marker.remove();
@@ -208,6 +335,12 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
     if (!map?.isStyleLoaded()) return;
     (map.getSource('aerial-editor-garden') as GeoJSONSource | undefined)?.setData(gardenData);
   }, [gardenData]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.isStyleLoaded()) return;
+    (map.getSource('aerial-editor-selected') as GeoJSONSource | undefined)?.setData(selectedData);
+  }, [selectedData]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -253,14 +386,19 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
   }
 
   function editExisting() {
-    const feature = garden.features.find((item) => item.id === selectedFeatureId);
-    if (!feature) return;
+    if (!selectedFeature) return;
+    const feature = selectedFeature;
     setFeatureType(feature.type);
     setDrawingKind(feature.geometry.type);
     setDrawing(drawingFromFeature(feature));
+    setSelectedFeatureId('');
     setMessage(`Redigerer ${feature.name}. Træk eller slet punkter og tryk Gem ændringer.`);
     const geometry = feature.geometry;
-    const first = geometry.type === 'Point' ? geometry.coordinates : geometry.type === 'LineString' ? geometry.coordinates[0] : geometry.coordinates[0]?.[0];
+    const first = geometry.type === 'Point'
+      ? geometry.coordinates
+      : geometry.type === 'LineString'
+        ? geometry.coordinates[0]
+        : geometry.coordinates[0]?.[0];
     if (first) mapRef.current?.easeTo({ center: first, zoom: Math.max(mapRef.current.getZoom(), 19) });
   }
 
@@ -296,7 +434,11 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
           confidence: existing.confidence,
           geometry,
         });
-        onGardenChanged({ ...garden, features: garden.features.map((item) => item.id === existing.id ? response.feature : item) });
+        onGardenChanged({
+          ...garden,
+          features: garden.features.map((item) => item.id === existing.id ? response.feature : item),
+        });
+        setSelectedFeatureId(existing.id);
         setMessage(`${existing.name} er opdateret.`);
       } else {
         const response = await api.createFeature(garden.id, {
@@ -307,10 +449,10 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
           geometry,
         });
         onGardenChanged({ ...garden, features: [...garden.features, response.feature] });
+        setSelectedFeatureId(response.feature.id);
         setMessage(`${FEATURE_TYPE_LABELS[drawing.type]} er gemt.`);
       }
       setDrawing(null);
-      setSelectedFeatureId('');
     } catch (caught) {
       setMessage(caught instanceof ApiError ? caught.message : 'Objektet kunne ikke gemmes.');
     } finally {
@@ -320,7 +462,9 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
 
   function cancelDrawing() {
     if (busy) return;
+    const previousFeatureId = drawing?.featureId ?? '';
     setDrawing(null);
+    setSelectedFeatureId(previousFeatureId);
     setMessage('Redigeringen blev annulleret.');
   }
 
@@ -356,12 +500,21 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
                   <label>Form<select value={drawingKind} onChange={(event) => setDrawingKind(event.target.value as DrawingKind)}><option value="Polygon">Område</option><option value="LineString">Linje</option><option value="Point">Punkt</option></select></label>
                   <button className="primary-button" type="button" onClick={startDrawing}>Tegn nyt</button>
                 </div>
-                {garden.features.length > 0 && (
-                  <div className="aerial-existing-editor">
-                    <label>Rediger tidligere objekt<select value={selectedFeatureId} onChange={(event) => setSelectedFeatureId(event.target.value)}><option value="">Vælg objekt…</option>{garden.features.map((feature) => <option key={feature.id} value={feature.id}>{feature.name} · {FEATURE_TYPE_LABELS[feature.type]}</option>)}</select></label>
-                    <button className="secondary-button" type="button" disabled={!selectedFeatureId} onClick={editExisting}>Rediger</button>
-                  </div>
-                )}
+
+                <div className={`aerial-selection-card${selectedFeature ? ' selected' : ''}`} aria-live="polite">
+                  {selectedFeature ? (
+                    <>
+                      <div>
+                        <span>Valgt på kortet</span>
+                        <strong>{selectedFeature.name}</strong>
+                        <small>{FEATURE_TYPE_LABELS[selectedFeature.type]}</small>
+                      </div>
+                      <button className="secondary-button" type="button" onClick={editExisting}>Rediger</button>
+                    </>
+                  ) : (
+                    <p>Tryk direkte på et eksisterende område, en linje eller et punkt på kortet for at vælge det.</p>
+                  )}
+                </div>
               </div>
             )}
             {drawing && (
