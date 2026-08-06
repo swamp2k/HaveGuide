@@ -15,6 +15,7 @@ import { api, ApiError } from '../api';
 import { captureApi } from '../capture-api';
 import { StatusMessage } from './StatusMessage';
 import './MappingAssistant.css';
+import './MappingTour.css';
 
 interface MappingAssistantProps {
   garden: GardenDetail;
@@ -42,7 +43,6 @@ interface CaptureGuidance {
   arrow: string;
   arrowRotation: number;
   liveDistanceM: number | null;
-  remainingDegrees: number | null;
 }
 
 const SHOTS_PER_STATION = 6;
@@ -245,11 +245,7 @@ function distanceMeters(from: { latitude: number; longitude: number }, to: { lat
   return earthRadiusM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function buildGuidance(
-  session: CaptureSession,
-  bearing: number | null,
-  position: PositionSnapshot | null,
-): CaptureGuidance {
+function buildGuidance(session: CaptureSession, bearing: number | null, position: PositionSnapshot | null): CaptureGuidance {
   const nextIndex = session.currentSequence;
   const stationNo = Math.floor(nextIndex / SHOTS_PER_STATION) + 1;
   const shotNo = (nextIndex % SHOTS_PER_STATION) + 1;
@@ -266,7 +262,6 @@ function buildGuidance(
       arrow: '◎',
       arrowRotation: 0,
       liveDistanceM: null,
-      remainingDegrees: null,
     };
   }
 
@@ -274,10 +269,7 @@ function buildGuidance(
     const liveDistanceM = previous.latitude !== null
       && previous.longitude !== null
       && position
-      ? distanceMeters(
-        { latitude: previous.latitude, longitude: previous.longitude },
-        position,
-      )
+      ? distanceMeters({ latitude: previous.latitude, longitude: previous.longitude }, position)
       : null;
     const ready = liveDistanceM !== null && liveDistanceM >= 3;
     return {
@@ -294,7 +286,6 @@ function buildGuidance(
       arrow: '➜',
       arrowRotation: 0,
       liveDistanceM,
-      remainingDegrees: null,
     };
   }
 
@@ -316,22 +307,16 @@ function buildGuidance(
     phase: 'turn',
     title: ready ? 'Godt — hold stille' : `Drej ${turnDirection} ${remainingText}`,
     detail: ready
-      ? 'Motivet matcher den ønskede retning. Brug den gennemsigtige billedkant til at finjustere overlap og tag billedet.'
-      : 'Behold cirka en tredjedel af forrige billede i overlapfeltet. Det binder billederne sammen.',
+      ? 'Motivet matcher retningen. Finjustér overlapfeltet og tag billedet.'
+      : 'Behold cirka en tredjedel af forrige billede i overlapfeltet.',
     ready,
     arrow: remainingDegrees !== null && remainingDegrees < 0 ? '↺' : '↻',
     arrowRotation: remainingDegrees === null ? 0 : Math.max(-90, Math.min(90, remainingDegrees)),
     liveDistanceM: null,
-    remainingDegrees,
   };
 }
 
-function GuidedCamera({
-  garden,
-  workspace,
-  onWorkspace,
-  onClose,
-}: {
+function GuidedCamera({ garden, workspace, onWorkspace, onClose }: {
   garden: GardenDetail;
   workspace: CaptureWorkspace;
   onWorkspace: (workspace: CaptureWorkspace) => void;
@@ -389,7 +374,7 @@ function GuidedCamera({
     let cancelled = false;
     async function startCamera() {
       if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraError('Direkte kamera understøttes ikke i denne browser. Brug filknappen nedenfor.');
+        setCameraError('Direkte kamera understøttes ikke i denne browser. Brug Vælg billede.');
         return;
       }
       try {
@@ -411,7 +396,7 @@ function GuidedCamera({
           await videoRef.current.play();
         }
       } catch {
-        setCameraError('Kameraet kunne ikke åbnes. Kontrollér tilladelsen eller brug filknappen.');
+        setCameraError('Kameraet kunne ikke åbnes. Kontrollér tilladelsen eller brug Vælg billede.');
       }
     }
     void startCamera();
@@ -470,7 +455,7 @@ function GuidedCamera({
       });
       onWorkspace(response.workspace);
       const latest = response.workspace.activeSession?.frames.at(-1);
-      setMessage(latest?.qualityMessages[0] ?? 'Billedet er gemt. Følg næste instruktion på skærmen.');
+      setMessage(latest?.qualityMessages[0] ?? 'Billedet er gemt. Følg næste instruktion.');
     } catch (caught) {
       setMessage(caught instanceof ApiError || caught instanceof Error ? caught.message : 'Billedet kunne ikke gemmes.');
     } finally {
@@ -506,12 +491,14 @@ function GuidedCamera({
 
   return (
     <div className="guided-camera" role="dialog" aria-modal="true" aria-label="Guidet haveopmåling">
-      <header className="guided-camera-header">
-        <div>
+      <header className="guided-camera-header guided-camera-header-with-back">
+        <button type="button" className="camera-back-button" onClick={onClose} disabled={busy}>
+          <span aria-hidden="true">←</span> Kortlæg
+        </button>
+        <div className="camera-step-heading">
           <p className="eyebrow">Station {guidance.stationNo} · billede {guidance.shotNo}/{SHOTS_PER_STATION}</p>
           <strong>{guidance.title}</strong>
         </div>
-        <button type="button" className="camera-close" onClick={onClose} aria-label="Luk kamera">×</button>
       </header>
 
       <div className="camera-stage">
@@ -522,24 +509,15 @@ function GuidedCamera({
           </div>
         )}
         <div className="camera-guides" aria-hidden="true"><span /><span /></div>
-
         <div className={`virtual-capture-guide${guidance.ready ? ' ready' : ''}`}>
           <div className="guide-arrow" style={{ transform: `rotate(${guidance.arrowRotation}deg)` }} aria-hidden="true">{guidance.arrow}</div>
-          <div>
-            <strong>{guidance.title}</strong>
-            <p>{guidance.detail}</p>
-          </div>
+          <div><strong>{guidance.title}</strong><p>{guidance.detail}</p></div>
         </div>
-
         <div className="capture-shot-progress" aria-label={`Billede ${guidance.shotNo} af ${SHOTS_PER_STATION} på stationen`}>
           {Array.from({ length: SHOTS_PER_STATION }, (_, index) => (
-            <span
-              key={index}
-              className={index < guidance.shotNo - 1 ? 'done' : index === guidance.shotNo - 1 ? 'current' : ''}
-            />
+            <span key={index} className={index < guidance.shotNo - 1 ? 'done' : index === guidance.shotNo - 1 ? 'current' : ''} />
           ))}
         </div>
-
         <div className="sensor-strip">
           <span>GPS {position ? `±${Math.round(position.accuracyM)} m` : 'søger…'}</span>
           <span>Retning {bearing === null ? '—' : `${Math.round(bearing)}°`}</span>
@@ -557,8 +535,7 @@ function GuidedCamera({
             {previous.overlapPercent !== null && <span>Overlap: {Math.round(previous.overlapPercent)}%</span>}
           </div>
         )}
-
-        <div className="camera-actions">
+        <div className="camera-actions camera-actions-with-exit">
           <label className="secondary-button camera-file-button">
             Vælg billede
             <input
@@ -580,42 +557,122 @@ function GuidedCamera({
             onClick={() => void takePhoto()}
             aria-label="Tag billede"
           ><span /></button>
-          <button type="button" className="secondary-button" disabled={busy || session.frames.length < 2} onClick={() => void complete()}>Afslut</button>
+          <button type="button" className="secondary-button" disabled={busy || session.frames.length < 2} onClick={() => void complete()}>Afslut tur</button>
         </div>
       </footer>
     </div>
   );
 }
 
+function sessionForTour(workspace: CaptureWorkspace): CaptureSession | null {
+  if (workspace.activeSession?.frames.length) return workspace.activeSession;
+  return workspace.sessions.find((session) => session.frames.length > 0) ?? null;
+}
+
+function frameLabel(frame: CaptureFrame): { stationNo: number; shotNo: number } {
+  return {
+    stationNo: Math.floor((frame.sequenceNo - 1) / SHOTS_PER_STATION) + 1,
+    shotNo: ((frame.sequenceNo - 1) % SHOTS_PER_STATION) + 1,
+  };
+}
+
+function VirtualTourViewer({ session, initialIndex, onClose }: {
+  session: CaptureSession;
+  initialIndex: number;
+  onClose: () => void;
+}) {
+  const [index, setIndex] = useState(initialIndex);
+  const frame = session.frames[index] ?? session.frames[0];
+
+  useEffect(() => {
+    document.body.classList.add('virtual-tour-open');
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+      if (event.key === 'ArrowLeft') setIndex((current) => Math.max(0, current - 1));
+      if (event.key === 'ArrowRight') setIndex((current) => Math.min(session.frames.length - 1, current + 1));
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.classList.remove('virtual-tour-open');
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [onClose, session.frames.length]);
+
+  if (!frame) return null;
+  const label = frameLabel(frame);
+
+  return (
+    <div className="virtual-tour-viewer" role="dialog" aria-modal="true" aria-label="Virtuel rundtur i haven">
+      <header className="virtual-tour-viewer-header">
+        <button type="button" onClick={onClose}><span aria-hidden="true">←</span> Kortlæg</button>
+        <div>
+          <p className="eyebrow">Virtuel rundtur</p>
+          <strong>Station {label.stationNo} · billede {label.shotNo}/{SHOTS_PER_STATION}</strong>
+        </div>
+        <span>{index + 1}/{session.frames.length}</span>
+      </header>
+
+      <main className="virtual-tour-stage">
+        <img src={frame.contentUrl} alt={`Station ${label.stationNo}, billede ${label.shotNo}`} />
+        <button type="button" className="tour-previous" onClick={() => setIndex((current) => Math.max(0, current - 1))} disabled={index === 0} aria-label="Forrige billede">‹</button>
+        <button type="button" className="tour-next" onClick={() => setIndex((current) => Math.min(session.frames.length - 1, current + 1))} disabled={index === session.frames.length - 1} aria-label="Næste billede">›</button>
+        <div className="tour-frame-information">
+          <strong>{qualityLabel(frame)}</strong>
+          <span>{frame.bearingDegrees === null ? 'Retning ukendt' : `Retning ${Math.round(frame.bearingDegrees)}°`}</span>
+          <span>{frame.accuracyM === null ? 'GPS ukendt' : `GPS ±${Math.round(frame.accuracyM)} m`}</span>
+        </div>
+      </main>
+
+      <nav className="virtual-tour-filmstrip" aria-label="Billeder i rundturen">
+        {session.frames.map((item, itemIndex) => {
+          const itemLabel = frameLabel(item);
+          return (
+            <button key={item.id} type="button" className={itemIndex === index ? 'active' : ''} onClick={() => setIndex(itemIndex)} aria-label={`Åbn station ${itemLabel.stationNo}, billede ${itemLabel.shotNo}`}>
+              <img src={item.contentUrl} alt="" />
+              <span>{itemLabel.stationNo}.{itemLabel.shotNo}</span>
+            </button>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}
+
 function VirtualTour({ workspace }: { workspace: CaptureWorkspace }) {
-  const session = workspace.activeSession ?? workspace.sessions.find((item) => item.frames.length > 0) ?? null;
+  const session = sessionForTour(workspace);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   if (!session?.frames.length) return null;
+
   const stationCount = Math.ceil(session.frames.length / SHOTS_PER_STATION);
   const positionedFrames = session.frames.filter((frame) => frame.latitude !== null && frame.longitude !== null).length;
 
   return (
-    <section className="mapping-assistant-card virtual-tour">
-      <div className="mapping-card-heading">
-        <div>
-          <p className="eyebrow">Virtuel rundtur</p>
-          <h2>{session.title}</h2>
-          <p>{stationCount} station{stationCount === 1 ? '' : 'er'} · GPS-position på {positionedFrames} af {session.frames.length} billeder.</p>
+    <>
+      <section className="mapping-assistant-card virtual-tour virtual-tour-entry">
+        <div className="mapping-card-heading">
+          <div>
+            <p className="eyebrow">Virtuel rundtur</p>
+            <h2>Gå gennem dine havebilleder</h2>
+            <p>{stationCount} station{stationCount === 1 ? '' : 'er'} · GPS på {positionedFrames} af {session.frames.length} billeder. Rundturen følger optagelsesrækkefølgen.</p>
+          </div>
+          <span className="tour-count">{session.frames.length} billeder</span>
         </div>
-        <span className="tour-count">{session.frames.length} billeder</span>
-      </div>
-      <div className="tour-strip">
-        {session.frames.map((frame) => {
-          const stationNo = Math.floor((frame.sequenceNo - 1) / SHOTS_PER_STATION) + 1;
-          const shotNo = ((frame.sequenceNo - 1) % SHOTS_PER_STATION) + 1;
-          return (
-            <article key={frame.id} className={`tour-frame quality-${frame.qualityStatus}`}>
-              <img src={frame.contentUrl} alt={`Station ${stationNo}, billede ${shotNo}`} />
-              <div><strong>{stationNo}.{shotNo}</strong><span>{qualityLabel(frame)}</span></div>
-            </article>
-          );
-        })}
-      </div>
-    </section>
+        <button type="button" className="primary-button open-virtual-tour" onClick={() => setViewerIndex(0)}>Åbn virtuel rundtur</button>
+        <div className="tour-strip tour-strip-preview">
+          {session.frames.slice(0, 8).map((frame, index) => {
+            const label = frameLabel(frame);
+            return (
+              <button key={frame.id} type="button" className={`tour-frame quality-${frame.qualityStatus}`} onClick={() => setViewerIndex(index)}>
+                <img src={frame.contentUrl} alt={`Station ${label.stationNo}, billede ${label.shotNo}`} />
+                <div><strong>{label.stationNo}.{label.shotNo}</strong><span>{qualityLabel(frame)}</span></div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {viewerIndex !== null && <VirtualTourViewer session={session} initialIndex={viewerIndex} onClose={() => setViewerIndex(null)} />}
+    </>
   );
 }
 
@@ -665,14 +722,12 @@ export function MappingAssistant({ garden }: MappingAssistantProps) {
 
   return (
     <div className="mapping-assistant">
-      <AerialOverview garden={garden} aerialAvailable={workspace.aerialAvailable} />
-
       <section className="mapping-assistant-card capture-entry-card">
         <div className="mapping-card-heading">
           <div>
             <p className="eyebrow">Guidet opmåling</p>
             <h2>Gå haven rundt station for station</h2>
-            <p>Appen guider dig gennem seks overlappende billeder på hvert sted og beder dig derefter gå videre langs kanten. Position, retning, rækkefølge og billedforbindelse gemmes samlet.</p>
+            <p>Appen guider dig gennem seks overlappende billeder på hvert sted og beder dig derefter gå videre langs kanten.</p>
           </div>
           <span className="capture-icon" aria-hidden="true">◎</span>
         </div>
@@ -687,22 +742,19 @@ export function MappingAssistant({ garden }: MappingAssistantProps) {
         )}
         <div className="survey-plan">
           <div><strong>1</strong><span>Tag seks billeder rundt om dig</span></div>
-          <div><strong>2</strong><span>Gå 4–6 skridt med uret langs kanten</span></div>
-          <div><strong>3</strong><span>Gentag til hele haven er dækket</span></div>
+          <div><strong>2</strong><span>Gå 4–6 skridt langs kanten</span></div>
+          <div><strong>3</strong><span>Gentag til haven er dækket</span></div>
         </div>
-        {workspace.activeSession && (
-          <p className="active-survey-status">Aktiv opmåling: station {activeStations} · {activeFrames} billeder gemt</p>
-        )}
+        {workspace.activeSession && <p className="active-survey-status">Aktiv opmåling: station {activeStations} · {activeFrames} billeder gemt</p>}
         <button type="button" className="primary-button" disabled={busy} onClick={() => void (workspace.activeSession ? setCameraOpen(true) : startCapture())}>
           {workspace.activeSession ? `Fortsæt opmåling · ${activeFrames} billeder` : 'Start guidet opmåling'}
         </button>
       </section>
 
       <VirtualTour workspace={workspace} />
+      <AerialOverview garden={garden} aerialAvailable={workspace.aerialAvailable} />
 
-      {cameraOpen && workspace.activeSession && (
-        <GuidedCamera garden={garden} workspace={workspace} onWorkspace={setWorkspace} onClose={() => setCameraOpen(false)} />
-      )}
+      {cameraOpen && workspace.activeSession && <GuidedCamera garden={garden} workspace={workspace} onWorkspace={setWorkspace} onClose={() => setCameraOpen(false)} />}
     </div>
   );
 }
