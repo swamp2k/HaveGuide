@@ -4,6 +4,8 @@ import type {
   createCaptureFrameSchema,
   createCaptureSessionSchema,
   updateCaptureSessionSchema,
+  updateCaptureStationSchema,
+  upsertCaptureHotspotSchema,
 } from '../shared/capture-schemas';
 import { ApiError } from './api';
 
@@ -44,5 +46,36 @@ export const captureApi = {
   ) => request<{ workspace: CaptureWorkspace }>(
     `/api/gardens/${gardenId}/capture/sessions/${sessionId}`,
     { method: 'PATCH', body: JSON.stringify(input) },
+  ),
+  updateStation: (
+    gardenId: string,
+    sessionId: string,
+    stationNo: number,
+    input: z.infer<typeof updateCaptureStationSchema>,
+  ) => request<{ workspace: CaptureWorkspace }>(
+    `/api/gardens/${gardenId}/capture/sessions/${sessionId}/stations/${stationNo}`,
+    { method: 'PATCH', body: JSON.stringify(input) },
+  ),
+  upsertHotspot: (
+    gardenId: string,
+    sessionId: string,
+    frameId: string,
+    input: z.infer<typeof upsertCaptureHotspotSchema>,
+  ) => request<{ workspace: CaptureWorkspace }>(
+    `/api/gardens/${gardenId}/capture/sessions/${sessionId}/frames/${frameId}/hotspots`,
+    { method: 'PUT', body: JSON.stringify(input) },
+  ),
+  deleteHotspot: (
+    gardenId: string,
+    sessionId: string,
+    frameId: string,
+    featureId: string,
+  ) => request<{ workspace: CaptureWorkspace }>(
+    `/api/gardens/${gardenId}/capture/sessions/${sessionId}/frames/${frameId}/hotspots/${featureId}`,
+    { method: 'DELETE' },
+  ),
+  reset: (gardenId: string) => request<{ deletedImages: number; workspace: CaptureWorkspace }>(
+    `/api/gardens/${gardenId}/capture`,
+    { method: 'DELETE' },
   ),
 };
