@@ -1,14 +1,14 @@
-# Milestone 4.1 – Luftfoto og guidet billedtur
+# Milestone 4.1 – Luftfoto, guidet opmåling og rumlig rundtur
 
 ## Formål
 
-Kortlægning skal ikke begynde med en tom GIS-flade. Brugeren starter med havens synlige grundstruktur på et kort eller luftfoto og beriger derefter modellen gennem en guidet billedtur.
+Kortlægning skal ikke begynde med en tom GIS-flade. Brugeren starter med havens synlige grundstruktur på et kort eller luftfoto og beriger derefter modellen gennem en guidet billedtur. Milestone 4.1.2 binder de to verdener sammen, så kortobjekter, optagelsesstationer og billeder kan opleves som samme have.
 
-## Implementeret arbejdsplan
+## 4.1 – Grundlag
 
-### 1. Luftfoto som kortlag
+### Luftfoto som kortlag
 
-- almindeligt OpenStreetMap-kort er fortsat sikker fallback
+- almindeligt OpenStreetMap-kort er sikker fallback
 - GeoDanmark Ortofoto forår kan vælges som luftfotolag
 - luftfoto hentes gennem Worker-ruten `/api/map/orthophoto/{z}/{x}/{y}.jpg`
 - Datafordeler-nøglen bliver på serveren og sendes aldrig til browseren
@@ -16,39 +16,73 @@ Kortlægning skal ikke begynde med en tom GIS-flade. Brugeren starter med havens
 
 Provider: GeoDanmark Ortofoto forår Web Mercator WMTS via Datafordeleren. Det kræver runtime-secreten `DATAFORDELER_API_KEY`.
 
-### 2. Guidet billedtur
+### Guidet opmåling
 
-- brugeren starter eller fortsætter én aktiv tur
+- brugeren starter eller fortsætter én aktiv opmåling
 - direkte kameravisning bruger som udgangspunkt bagsidekameraet
-- et gennemsigtigt udsnit af forrige billede vises i venstre side
-- standardmålet er 35 procent overlap
+- seks billeder udgør én station
+- billeder ved samme station guides med cirka 60 graders drejning og visuelt overlap
+- efter en station guides brugeren videre langs havens kant
 - native kameravælger er fallback, hvis direkte kamera ikke kan bruges
 
-### 3. Billedkæde
+Hvert billede gemmes med sessions-id, sekvensnummer, privat medie-id, GPS, GPS-nøjagtighed, kompasretning, afstand/retningsændring, estimeret overlap og kvalitetsstatus.
 
-Hvert billede gemmes med:
+Kvalitetskontrollen er konservativ: manglende eller upræcise sensorer stopper ikke turen, og overlap er et estimat ud fra retning – ikke computer vision.
 
-- sessions-id og sekvensnummer
-- privat medie-id i R2/D1
-- GPS-position og nøjagtighed, når den er tilgængelig
-- kompasretning, når browseren giver adgang
-- beregnet afstand og retningsændring fra forrige billede
-- estimeret overlap og kvalitetsbeskeder
+## 4.1.2 – Rumlig virtuel rundtur
 
-### 4. Kvalitetskontrol
+### Stationer og rute på kortet
 
-Kvalitetskontrollen er forklarlig og konservativ:
+- billeder samles i stationer efter optagelsesrækkefølgen
+- stationernes position udledes som udgangspunkt af billedernes GPS-data
+- stationerne vises oven på luftfotoet sammen med havens kortobjekter
+- ruten mellem positionerede stationer vises
+- aktivt billede fremhæver den tilsvarende station
+- billedets kompasretning vises som en retningslinje fra stationen
+- stationer kan trækkes manuelt på plads, hvis telefonens GPS ligger forkert
+- den manuelle korrektion gemmes og erstatter den afledte stationsposition i rundturen
 
-- overlap estimeres fra retningsændringen og et vejledende vandret synsfelt
-- store afstandsspring markeres
-- manglende GPS eller kompas stopper ikke turen, men vises som en advarsel
-- billeder klassificeres som `good`, `review` eller `retake`
+### Kortobjekter som hotspots i billeder
 
-Det er ikke computer-vision-baseret panorama-syning endnu. Metadata og rækkefølge er bevidst struktureret, så egentlig feature matching eller fotogrammetri kan tilføjes senere.
+Et kortobjekt og et billede bindes sammen gennem et hotspot med normaliseret X/Y-position i billedet.
 
-### 5. Virtuel rundtur
+- samme kortobjekt kan optræde i flere billeder
+- samme billede kan indeholde flere objekter
+- hotspot peger direkte på det eksisterende `garden_features`-objekt; der oprettes ikke en separat kopi
+- hotspots vises som klikbare navne oven på rundtursbilledet
+- valg af et hotspot fremhæver samme objekt på kortet
+- valg af et kortobjekt hopper til et billede, hvor objektet er knyttet, når en kobling findes
+- koblinger kan fjernes igen fra det enkelte billede
 
-Seneste aktive eller gennemførte tur vises som en vandret sekvens. Billederne står i den rækkefølge, de blev taget, og hvert billede viser sin kvalitetsstatus.
+### Assisteret kobling
+
+Appen kan foreslå kortobjekter, der geografisk kan være synlige fra billedets position og retning. Forslaget er kun hjælp og bliver aldrig automatisk til en bekræftet kobling.
+
+Brugeren vælger objektet og trykker derefter på det faktiske objekt i billedet. Det gemmer hotspot-positionen.
+
+### Nulstil havebilleder
+
+Brugeren kan nulstille den guidede opmåling og starte forfra.
+
+Reset skal:
+
+- kræve eksplicit bekræftelse
+- slette aktive og tidligere capture-sessioner for haven
+- slette stationkorrektioner og hotspots via relationernes cascade-regler
+- markere de tilhørende capture-medier som slettet i D1
+- fjerne deres billedobjekter fra det private R2-lager
+- bevare kortobjekter, planter og andre havebilleder, der ikke indgår i den guidede opmåling
+
+### Mobil viewport
+
+Den rumlige rundtur er en ægte fuldskærmsvisning.
+
+- app-header og bundnavigation skjules under rundturen
+- viewer er låst til `100dvh` og viewportens bredde
+- hovedindhold har `min-width: 0` og må ikke udvide siden
+- filmstrippen har fast viewportbredde og scroller vandret inde i visningen
+- thumbnails må aldrig presse browserens layout ud over skærmbredden
+- aktiv thumbnail scrolles ind i den synlige del af filmstrippen
 
 ## Datamodel
 
@@ -57,22 +91,36 @@ Migration `0005_guided_capture.sql` opretter:
 - `capture_sessions`
 - `capture_frames`
 
-Migrationen er additiv og ændrer ikke eksisterende have-, plante- eller mediedata.
+Migration `0006_spatial_tour.sql` tilføjer:
 
-## Aktivering af luftfoto
+- `capture_station_positions` til manuelle stationskorrektioner
+- `capture_feature_links` til billed-hotspots og kobling til `garden_features`
 
-Opret en API-nøgle hos Datafordeleren og gem den som Worker-secret:
+Begge migrationer er additive i forhold til eksisterende have-, plante- og design-data.
 
-```bash
-npx wrangler secret put DATAFORDELER_API_KEY
-```
+## Backup
 
-Da GitHub/Cloudflare deployment allerede er tilsluttet, kræver en secretændring normalt blot en ny deployment eller et nyt push til `main`.
+JSON-eksporten bruger den samme `CaptureWorkspace` som klienten. Derfor følger stationer og hotspot-koblinger med i metadata-backuppen. Selve billedfilerne ligger fortsat privat i R2.
+
+## Acceptkriterier for 4.1.2
+
+Milestonen er funktionelt opfyldt, når brugeren kan:
+
+1. åbne rundturen og se det aktuelle billede sammen med luftfotokortet
+2. se og vælge de stationer, billederne blev taget fra
+3. rette en stations placering ved at trække den på kortet
+4. se det aktuelle billedes kameraretning på kortet
+5. vælge et eksisterende kortobjekt, fx et træ, og placere det som hotspot i billedet
+6. klikke på hotspottet og få samme træ fremhævet på luftfotoet
+7. klikke på et knyttet kortobjekt og hoppe til et relevant rundtursbillede
+8. nulstille alle guidede havebilleder og starte forfra uden at slette den øvrige have
+9. bruge hele rundturen på mobil uden at filmstrip eller app-navigation går uden for eller oven på viewporten
 
 ## Begrænsninger
 
+- GPS i en almindelig telefon er ikke egnet til centimeteropmåling; derfor kan stationer rettes manuelt
 - kompasadgang og absolut retning varierer mellem Android-, iOS- og desktopbrowsere
-- GPS i en almindelig telefon er ikke egnet til centimeteropmåling
-- overlap er et estimat, ikke visuel feature matching
-- luftfotoets aktualitet og opløsning bestemmes af den valgte offentlige provider
-- ægte AR-opmåling kræver senere en native Capacitor/ARCore/ARKit-fase
+- forslag til synlige objekter er geometriske hints, ikke automatisk billedgenkendelse
+- hotspots placeres manuelt og er ikke feature-matched mellem billeder endnu
+- billederne er stadig separate perspektiver; de er ikke sammensyet til et 360-graders panorama
+- photogrammetry, visuel feature matching og ægte AR-opmåling ligger i en senere fase
