@@ -19,3 +19,14 @@ export const createCaptureFrameSchema = z.object({
 export const updateCaptureSessionSchema = z.object({
   status: z.enum(['completed', 'cancelled']),
 });
+
+export const updateCaptureStationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+
+export const upsertCaptureHotspotSchema = z.object({
+  featureId: z.string().uuid(),
+  xNorm: z.number().min(0).max(1),
+  yNorm: z.number().min(0).max(1),
+});
