@@ -1,10 +1,14 @@
 import type {
   CaptureFrame,
+  CaptureHotspot,
   CaptureQuality,
   CaptureSession,
+  CaptureStation,
   CaptureWorkspace,
 } from '../../shared/capture-types';
 import { nowIso } from '../utils/time';
+
+const SHOTS_PER_STATION = 6;
 
 interface SessionRow {
   id: string;
@@ -37,6 +41,27 @@ interface FrameRow {
   original_filename: string;
 }
 
+interface HotspotRow {
+  frame_id: string;
+  feature_id: string;
+  x_norm: number;
+  y_norm: number;
+  source: CaptureHotspot['source'];
+  confidence: CaptureHotspot['confidence'];
+}
+
+interface StationPositionRow {
+  session_id: string;
+  station_no: number;
+  latitude: number;
+  longitude: number;
+}
+
+interface CaptureMediaRow {
+  id: string;
+  r2_key: string;
+}
+
 interface FrameInput {
   mediaId: string;
   latitude: number | null;
@@ -46,7 +71,18 @@ interface FrameInput {
   capturedAt?: string;
 }
 
-function mapFrame(row: FrameRow): CaptureFrame {
+function mapHotspot(row: HotspotRow): CaptureHotspot {
+  return {
+    frameId: row.frame_id,
+    featureId: row.feature_id,
+    xNorm: row.x_norm,
+    yNorm: row.y_norm,
+    source: row.source,
+    confidence: row.confidence,
+  };
+}
+
+function mapFrame(row: FrameRow, hotspots: CaptureHotspot[] = []): CaptureFrame {
   return {
     id: row.id,
     sessionId: row.session_id,
@@ -64,10 +100,80 @@ function mapFrame(row: FrameRow): CaptureFrame {
     capturedAt: row.captured_at,
     contentUrl: `/api/media/${row.media_id}/content`,
     originalFilename: row.original_filename,
+    hotspots,
   };
 }
 
-function mapSession(row: SessionRow, frames: CaptureFrame[]): CaptureSession {
+function stationNoForSequence(sequenceNo: number): number {
+  return Math.floor((sequenceNo - 1) / SHOTS_PER_STATION) + 1;
+}
+
+function buildStations(
+  frames: CaptureFrame[],
+  overrides: Map<number, StationPositionRow>,
+): CaptureStation[] {
+  const grouped = new Map<number, CaptureFrame[]>();
+  for (const frame of frames) {
+    const stationNo = stationNoForSequence(frame.sequenceNo);
+    const stationFrames = grouped.get(stationNo) ?? [];
+    stationFrames.push(frame);
+    grouped.set(stationNo, stationFrames);
+  }
+
+  return [...grouped.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([stationNo, stationFrames]) => {
+      const override = overrides.get(stationNo);
+      if (override) {
+        return {
+          stationNo,
+          latitude: override.latitude,
+          longitude: override.longitude,
+          accuracyM: null,
+          source: 'manual' as const,
+          frameIds: stationFrames.map((frame) => frame.id),
+        };
+      }
+
+      const positioned = stationFrames.filter(
+        (frame) => frame.latitude !== null && frame.longitude !== null,
+      );
+      if (positioned.length === 0) {
+        return {
+          stationNo,
+          latitude: null,
+          longitude: null,
+          accuracyM: null,
+          source: 'unknown' as const,
+          frameIds: stationFrames.map((frame) => frame.id),
+        };
+      }
+
+      const latitude = positioned.reduce((sum, frame) => sum + (frame.latitude ?? 0), 0) / positioned.length;
+      const longitude = positioned.reduce((sum, frame) => sum + (frame.longitude ?? 0), 0) / positioned.length;
+      const accuracies = positioned
+        .map((frame) => frame.accuracyM)
+        .filter((accuracy): accuracy is number => accuracy !== null);
+      const accuracyM = accuracies.length > 0
+        ? accuracies.reduce((sum, accuracy) => sum + accuracy, 0) / accuracies.length
+        : null;
+
+      return {
+        stationNo,
+        latitude,
+        longitude,
+        accuracyM,
+        source: 'gps' as const,
+        frameIds: stationFrames.map((frame) => frame.id),
+      };
+    });
+}
+
+function mapSession(
+  row: SessionRow,
+  frames: CaptureFrame[],
+  overrides: Map<number, StationPositionRow>,
+): CaptureSession {
   return {
     id: row.id,
     gardenId: row.garden_id,
@@ -80,6 +186,7 @@ function mapSession(row: SessionRow, frames: CaptureFrame[]): CaptureSession {
     startedAt: row.started_at,
     completedAt: row.completed_at,
     frames,
+    stations: buildStations(frames, overrides),
   };
 }
 
@@ -174,7 +281,7 @@ export async function getCaptureWorkspace(
   gardenId: string,
   aerialAvailable: boolean,
 ): Promise<CaptureWorkspace> {
-  const [sessionsResult, framesResult] = await Promise.all([
+  const [sessionsResult, framesResult, hotspotsResult, stationPositionsResult] = await Promise.all([
     db.prepare(`SELECT id, garden_id, target_feature_id, title, mode, status,
       target_overlap_percent, current_sequence, started_at, completed_at
       FROM capture_sessions WHERE garden_id = ? ORDER BY created_at DESC`)
@@ -189,17 +296,46 @@ export async function getCaptureWorkspace(
       WHERE s.garden_id = ? AND m.deleted_at IS NULL
       ORDER BY s.created_at DESC, f.sequence_no`)
       .bind(gardenId).all<FrameRow>(),
+    db.prepare(`SELECT l.frame_id, l.feature_id, l.x_norm, l.y_norm, l.source, l.confidence
+      FROM capture_feature_links l
+      JOIN capture_frames f ON f.id = l.frame_id
+      JOIN capture_sessions s ON s.id = f.session_id
+      WHERE s.garden_id = ?`)
+      .bind(gardenId).all<HotspotRow>(),
+    db.prepare(`SELECT p.session_id, p.station_no, p.latitude, p.longitude
+      FROM capture_station_positions p
+      JOIN capture_sessions s ON s.id = p.session_id
+      WHERE s.garden_id = ?`)
+      .bind(gardenId).all<StationPositionRow>(),
   ]);
+
+  const hotspotsByFrame = new Map<string, CaptureHotspot[]>();
+  for (const row of hotspotsResult.results) {
+    const hotspots = hotspotsByFrame.get(row.frame_id) ?? [];
+    hotspots.push(mapHotspot(row));
+    hotspotsByFrame.set(row.frame_id, hotspots);
+  }
 
   const framesBySession = new Map<string, CaptureFrame[]>();
   for (const row of framesResult.results) {
     const frames = framesBySession.get(row.session_id) ?? [];
-    frames.push(mapFrame(row));
+    frames.push(mapFrame(row, hotspotsByFrame.get(row.id) ?? []));
     framesBySession.set(row.session_id, frames);
   }
 
+  const stationOverridesBySession = new Map<string, Map<number, StationPositionRow>>();
+  for (const row of stationPositionsResult.results) {
+    const stationMap = stationOverridesBySession.get(row.session_id) ?? new Map<number, StationPositionRow>();
+    stationMap.set(row.station_no, row);
+    stationOverridesBySession.set(row.session_id, stationMap);
+  }
+
   const sessions = sessionsResult.results.map((row) =>
-    mapSession(row, framesBySession.get(row.id) ?? []));
+    mapSession(
+      row,
+      framesBySession.get(row.id) ?? [],
+      stationOverridesBySession.get(row.id) ?? new Map<number, StationPositionRow>(),
+    ));
 
   return {
     activeSession: sessions.find((session) => session.status === 'active') ?? null,
@@ -322,4 +458,122 @@ export async function finishCaptureSession(
     WHERE id = ? AND garden_id = ? AND status = 'active'`)
     .bind(status, timestamp, timestamp, sessionId, gardenId).run();
   return (result.meta.changes ?? 0) === 1;
+}
+
+export async function updateCaptureStationPosition(
+  db: D1Database,
+  gardenId: string,
+  sessionId: string,
+  stationNo: number,
+  latitude: number,
+  longitude: number,
+): Promise<boolean> {
+  const firstSequence = (stationNo - 1) * SHOTS_PER_STATION + 1;
+  const lastSequence = stationNo * SHOTS_PER_STATION;
+  const stationExists = await db.prepare(`SELECT 1 AS found
+    FROM capture_frames f
+    JOIN capture_sessions s ON s.id = f.session_id
+    WHERE s.id = ? AND s.garden_id = ? AND f.sequence_no BETWEEN ? AND ? LIMIT 1`)
+    .bind(sessionId, gardenId, firstSequence, lastSequence)
+    .first<{ found: number }>();
+  if (stationExists?.found !== 1) return false;
+
+  const timestamp = nowIso();
+  await db.prepare(`INSERT INTO capture_station_positions
+    (session_id, station_no, latitude, longitude, source, updated_at)
+    VALUES (?, ?, ?, ?, 'manual', ?)
+    ON CONFLICT(session_id, station_no) DO UPDATE SET
+      latitude = excluded.latitude,
+      longitude = excluded.longitude,
+      source = 'manual',
+      updated_at = excluded.updated_at`)
+    .bind(sessionId, stationNo, latitude, longitude, timestamp)
+    .run();
+  return true;
+}
+
+export async function upsertCaptureHotspot(
+  db: D1Database,
+  gardenId: string,
+  sessionId: string,
+  frameId: string,
+  featureId: string,
+  xNorm: number,
+  yNorm: number,
+): Promise<boolean> {
+  const frame = await db.prepare(`SELECT 1 AS found
+    FROM capture_frames f
+    JOIN capture_sessions s ON s.id = f.session_id
+    WHERE f.id = ? AND s.id = ? AND s.garden_id = ? LIMIT 1`)
+    .bind(frameId, sessionId, gardenId)
+    .first<{ found: number }>();
+  if (frame?.found !== 1) return false;
+
+  const timestamp = nowIso();
+  await db.prepare(`INSERT INTO capture_feature_links
+    (frame_id, feature_id, x_norm, y_norm, source, confidence, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'manual', 'confirmed', ?, ?)
+    ON CONFLICT(frame_id, feature_id) DO UPDATE SET
+      x_norm = excluded.x_norm,
+      y_norm = excluded.y_norm,
+      source = 'manual',
+      confidence = 'confirmed',
+      updated_at = excluded.updated_at`)
+    .bind(frameId, featureId, xNorm, yNorm, timestamp, timestamp)
+    .run();
+  return true;
+}
+
+export async function deleteCaptureHotspot(
+  db: D1Database,
+  gardenId: string,
+  sessionId: string,
+  frameId: string,
+  featureId: string,
+): Promise<boolean> {
+  const frame = await db.prepare(`SELECT 1 AS found
+    FROM capture_frames f
+    JOIN capture_sessions s ON s.id = f.session_id
+    WHERE f.id = ? AND s.id = ? AND s.garden_id = ? LIMIT 1`)
+    .bind(frameId, sessionId, gardenId)
+    .first<{ found: number }>();
+  if (frame?.found !== 1) return false;
+
+  const result = await db.prepare(`DELETE FROM capture_feature_links
+    WHERE frame_id = ? AND feature_id = ?`)
+    .bind(frameId, featureId)
+    .run();
+  return (result.meta.changes ?? 0) > 0;
+}
+
+export async function resetCaptureWorkspace(
+  db: D1Database,
+  userId: string,
+  gardenId: string,
+): Promise<{ deletedImages: number; r2Keys: string[] }> {
+  const mediaResult = await db.prepare(`SELECT DISTINCT m.id, m.r2_key
+    FROM media m
+    JOIN capture_frames f ON f.media_id = m.id
+    JOIN capture_sessions s ON s.id = f.session_id
+    WHERE s.garden_id = ? AND m.user_id = ? AND m.deleted_at IS NULL`)
+    .bind(gardenId, userId)
+    .all<CaptureMediaRow>();
+
+  const timestamp = nowIso();
+  await db.batch([
+    db.prepare(`UPDATE media SET deleted_at = ?
+      WHERE user_id = ? AND deleted_at IS NULL AND id IN (
+        SELECT f.media_id FROM capture_frames f
+        JOIN capture_sessions s ON s.id = f.session_id
+        WHERE s.garden_id = ?
+      )`)
+      .bind(timestamp, userId, gardenId),
+    db.prepare('DELETE FROM capture_sessions WHERE garden_id = ?')
+      .bind(gardenId),
+  ]);
+
+  return {
+    deletedImages: mediaResult.results.length,
+    r2Keys: mediaResult.results.map((row) => row.r2_key),
+  };
 }
