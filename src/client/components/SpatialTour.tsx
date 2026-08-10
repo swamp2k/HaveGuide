@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import maplibregl, {
   type GeoJSONSource,
   type Map as MapLibreMap,
@@ -26,7 +26,6 @@ interface SpatialTourProps {
 }
 
 const SHOTS_PER_STATION = 6;
-const emptyCollection: FeatureCollection = { type: 'FeatureCollection', features: [] };
 
 function sessionForTour(workspace: CaptureWorkspace): CaptureSession | null {
   if (workspace.activeSession?.frames.length) return workspace.activeSession;
@@ -169,7 +168,10 @@ function SpatialTourMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const onFeatureSelectRef = useRef(onFeatureSelect);
   const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => { onFeatureSelectRef.current = onFeatureSelect; }, [onFeatureSelect]);
 
   const featureData = useMemo<FeatureCollection<Geometry>>(() => ({
     type: 'FeatureCollection',
@@ -282,13 +284,14 @@ function SpatialTourMap({
       const selectableLayers = ['spatial-feature-point', 'spatial-feature-line', 'spatial-feature-fill']
         .filter((layerId) => map.getLayer(layerId));
       const padding = 10;
-      const hit = map.queryRenderedFeatures([
+      const hitBox: [[number, number], [number, number]] = [
         [event.point.x - padding, event.point.y - padding],
         [event.point.x + padding, event.point.y + padding],
-      ], { layers: selectableLayers })
+      ];
+      const hit = map.queryRenderedFeatures(hitBox, { layers: selectableLayers })
         .find((candidate) => typeof candidate.properties?.id === 'string');
       const featureId = typeof hit?.properties?.id === 'string' ? hit.properties.id : '';
-      if (featureId) onFeatureSelect(featureId);
+      if (featureId) onFeatureSelectRef.current(featureId);
     });
 
     mapRef.current = map;
@@ -298,7 +301,7 @@ function SpatialTourMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [aerialAvailable, garden.centerLat, garden.centerLng, onFeatureSelect]);
+  }, [aerialAvailable, garden.centerLat, garden.centerLng]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -322,7 +325,7 @@ function SpatialTourMap({
     const map = mapRef.current;
     if (!map?.isStyleLoaded()) return;
     (map.getSource('spatial-direction') as GeoJSONSource | undefined)?.setData(directionData);
-    if (activeStation?.latitude !== null && activeStation?.longitude !== null) {
+    if (activeStation && activeStation.latitude !== null && activeStation.longitude !== null) {
       map.easeTo({ center: [activeStation.longitude, activeStation.latitude], duration: 350 });
     }
   }, [activeStation, directionData]);
@@ -432,10 +435,8 @@ function SpatialTourViewer({
     active?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [index]);
 
-  if (!session || !frame) return null;
-  const label = frameLabel(frame);
-
-  function selectMapFeature(featureId: string) {
+  const selectMapFeature = useCallback((featureId: string) => {
+    if (!session) return;
     setSelectedFeatureId(featureId);
     const linkedIndexes = session.frames
       .map((item, itemIndex) => item.hotspots.some((hotspot) => hotspot.featureId === featureId) ? itemIndex : -1)
@@ -444,20 +445,19 @@ function SpatialTourViewer({
       setMessage('Objektet er på kortet, men er endnu ikke knyttet til et billede. Tryk “Knyt objekt”.');
       return;
     }
-    const currentPosition = linkedIndexes.indexOf(index);
-    const nextIndex = currentPosition >= 0
-      ? linkedIndexes[(currentPosition + 1) % linkedIndexes.length]
-      : linkedIndexes[0];
-    if (nextIndex !== undefined) setIndex(nextIndex);
+    const firstLinkedIndex = linkedIndexes[0];
+    if (firstLinkedIndex !== undefined) setIndex(firstLinkedIndex);
     setMessage(`${linkedIndexes.length} billede${linkedIndexes.length === 1 ? '' : 'r'} er knyttet til objektet.`);
-  }
+  }, [session]);
 
-  function selectStation(stationNo: number) {
+  const selectStation = useCallback((stationNo: number) => {
+    if (!session) return;
     const firstIndex = session.frames.findIndex((item) => frameLabel(item).stationNo === stationNo);
     if (firstIndex >= 0) setIndex(firstIndex);
-  }
+  }, [session]);
 
-  async function moveStation(stationNo: number, longitude: number, latitude: number) {
+  const moveStation = useCallback(async (stationNo: number, longitude: number, latitude: number) => {
+    if (!session) return;
     setBusy(true);
     try {
       const response = await captureApi.updateStation(garden.id, session.id, stationNo, { latitude, longitude });
@@ -468,9 +468,12 @@ function SpatialTourViewer({
     } finally {
       setBusy(false);
     }
-  }
+  }, [garden.id, onWorkspace, session]);
 
-  async function placeHotspot(event: React.MouseEvent<HTMLImageElement>) {
+  if (!session || !frame) return null;
+  const label = frameLabel(frame);
+
+  async function placeHotspot(event: ReactMouseEvent<HTMLImageElement>) {
     if (!linkFeatureId || busy) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) return;
@@ -519,7 +522,12 @@ function SpatialTourViewer({
           <p className="eyebrow">Rumlig rundtur</p>
           <strong>Station {label.stationNo} · billede {label.shotNo}/{SHOTS_PER_STATION}</strong>
         </div>
-        <button type="button" className={linkFeatureId ? 'active' : ''} onClick={() => setLinkFeatureId(linkFeatureId ? '' : (selectedFeatureId || candidates[0]?.feature.id || ''))} disabled={busy || garden.features.length === 0}>
+        <button
+          type="button"
+          className={linkFeatureId ? 'active' : ''}
+          onClick={() => setLinkFeatureId(linkFeatureId ? '' : (selectedFeatureId || candidates[0]?.feature.id || ''))}
+          disabled={busy || garden.features.length === 0}
+        >
           ＋ Knyt objekt
         </button>
       </header>
@@ -680,7 +688,7 @@ export function SpatialTour({ garden, workspace, onWorkspace }: SpatialTourProps
       const response = await captureApi.reset(garden.id);
       setViewerIndex(null);
       onWorkspace(response.workspace);
-      setMessage(`${response.deletedImages} rundtur${response.deletedImages === 1 ? 'sbillede er' : 'sbilleder er'} slettet. Du kan starte en ny opmåling.`);
+      setMessage(`${response.deletedImages} rundtursbillede${response.deletedImages === 1 ? '' : 'r'} slettet. Du kan starte en ny opmåling.`);
     } catch (caught) {
       setMessage(caught instanceof ApiError ? caught.message : 'Havebillederne kunne ikke nulstilles.');
     } finally {
@@ -719,12 +727,12 @@ export function SpatialTour({ garden, workspace, onWorkspace }: SpatialTourProps
         {message && <StatusMessage>{message}</StatusMessage>}
         <button type="button" className="primary-button open-spatial-tour" onClick={() => setViewerIndex(0)}>Åbn rumlig rundtur</button>
         <div className="tour-strip spatial-tour-preview">
-          {session.frames.slice(0, 8).map((frame, frameIndex) => {
-            const label = frameLabel(frame);
+          {session.frames.slice(0, 8).map((previewFrame, frameIndex) => {
+            const label = frameLabel(previewFrame);
             return (
-              <button key={frame.id} type="button" className={`tour-frame quality-${frame.qualityStatus}`} onClick={() => setViewerIndex(frameIndex)}>
-                <img src={frame.contentUrl} alt={`Station ${label.stationNo}, billede ${label.shotNo}`} />
-                <div><strong>{label.stationNo}.{label.shotNo}</strong><span>{frame.hotspots.length} objekter</span></div>
+              <button key={previewFrame.id} type="button" className={`tour-frame quality-${previewFrame.qualityStatus}`} onClick={() => setViewerIndex(frameIndex)}>
+                <img src={previewFrame.contentUrl} alt={`Station ${label.stationNo}, billede ${label.shotNo}`} />
+                <div><strong>{label.stationNo}.{label.shotNo}</strong><span>{previewFrame.hotspots.length} objekter</span></div>
               </button>
             );
           })}
