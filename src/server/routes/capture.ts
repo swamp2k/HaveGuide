@@ -26,10 +26,6 @@ import { jsonError } from '../utils/response';
 export const captureRoutes = new Hono<AppEnvironment>();
 captureRoutes.use('*', requireAuth);
 
-async function gardenAvailable(c: Parameters<typeof gardenBelongsToUser>[0] extends never ? never : never) {
-  return c;
-}
-
 captureRoutes.get('/:gardenId/capture', async (c) => {
   const gardenId = c.req.param('gardenId');
   if (!gardenId || !(await gardenBelongsToUser(c.env.DB, c.get('user').id, gardenId))) {
