@@ -1,0 +1,85 @@
+.smart-scan-card {
+  border-color: #a8c9ae;
+  background: linear-gradient(145deg, #f8fcf7, #e9f4e7);
+}
+
+.smart-scan-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.smart-scan-heading h2 {
+  margin-bottom: .35rem;
+}
+
+.smart-scan-heading p:last-child {
+  max-width: 760px;
+  color: var(--text-muted);
+}
+
+.smart-scan-icon {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: var(--green-900);
+  color: white;
+  font-size: 1.8rem;
+}
+
+.smart-scan-capabilities {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .55rem;
+  margin: 1rem 0;
+}
+
+.smart-scan-capabilities > div {
+  min-width: 0;
+  display: grid;
+  gap: .15rem;
+  padding: .7rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 72%);
+}
+
+.smart-scan-capabilities span {
+  color: var(--text-muted);
+  font-size: .78rem;
+}
+
+.smart-scan-capabilities strong {
+  font-size: .9rem;
+}
+
+.smart-scan-capabilities .ready strong { color: var(--green-900); }
+.smart-scan-capabilities .missing strong { color: #9b302e; }
+.smart-scan-capabilities .optional strong { color: #765f25; }
+
+.smart-scan-next,
+.smart-scan-web-note {
+  display: grid;
+  gap: .25rem;
+  margin-top: .9rem;
+  padding: .8rem;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 70%);
+}
+
+.smart-scan-next span,
+.smart-scan-web-note span {
+  color: var(--text-muted);
+  font-size: .86rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 560px) {
+  .smart-scan-heading { gap: .65rem; }
+  .smart-scan-icon { width: 44px; height: 44px; border-radius: 14px; font-size: 1.45rem; }
+  .smart-scan-capabilities { grid-template-columns: 1fr; }
+}
