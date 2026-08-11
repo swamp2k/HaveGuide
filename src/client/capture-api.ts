@@ -8,11 +8,12 @@ import type {
   upsertCaptureHotspotSchema,
 } from '../shared/capture-schemas';
 import { ApiError } from './api';
+import { normalizeRuntimeUrls, runtimeUrl } from './runtime-url';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body) headers.set('Content-Type', 'application/json');
-  const response = await fetch(path, { ...init, headers, credentials: 'same-origin' });
+  const response = await fetch(runtimeUrl(path), { ...init, headers, credentials: 'include' });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: 'Forespørgslen mislykkedes.' })) as {
       error: string;
@@ -20,7 +21,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     };
     throw new ApiError(body.error, response.status, body.code);
   }
-  return response.json() as Promise<T>;
+  return normalizeRuntimeUrls((await response.json()) as T);
 }
 
 export const captureApi = {
