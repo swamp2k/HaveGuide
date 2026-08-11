@@ -32,6 +32,7 @@ import type {
   updateWalkSchema,
 } from '../shared/schemas';
 import { createPasswordChallenge, derivePasswordProof } from './auth/password';
+import { normalizeRuntimeUrls, runtimeUrl } from './runtime-url';
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number, public readonly code?: string, public readonly details?: unknown) { super(message); }
@@ -40,12 +41,12 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
-  const response = await fetch(path, { ...init, headers, credentials: 'same-origin' });
+  const response = await fetch(runtimeUrl(path), { ...init, headers, credentials: 'include' });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({ error: 'Forespørgslen mislykkedes.' }))) as ApiErrorBody;
     throw new ApiError(body.error, response.status, body.code, body.details);
   }
-  return (await response.json()) as T;
+  return normalizeRuntimeUrls((await response.json()) as T);
 }
 
 type Credentials = z.infer<typeof credentialsSchema>;
