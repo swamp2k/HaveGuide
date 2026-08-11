@@ -1,0 +1,20 @@
+{
+  "name": "@have-guide/garden-scan",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Android native bridge for Have Guide Smart Garden Scan.",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "android/src/main/",
+    "android/build.gradle"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  },
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  }
+}
