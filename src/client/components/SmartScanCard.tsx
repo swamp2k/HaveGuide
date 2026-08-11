@@ -3,7 +3,9 @@ import {
   ensureGardenScanArCore,
   getGardenScanCapabilities,
   requestGardenScanPermission,
+  startGardenScan,
   type GardenScanCapabilities,
+  type GardenScanSummary,
 } from '../native/garden-scan';
 import { StatusMessage } from './StatusMessage';
 import './SmartScanCard.css';
@@ -12,8 +14,15 @@ function capabilityLabel(value: boolean): string {
   return value ? 'Klar' : 'Ikke tilgængelig';
 }
 
+function durationLabel(durationMs: number): string {
+  const seconds = Math.max(0, Math.round(durationMs / 1000));
+  if (seconds < 60) return `${seconds} sek.`;
+  return `${Math.floor(seconds / 60)} min. ${seconds % 60} sek.`;
+}
+
 export function SmartScanCard() {
   const [capabilities, setCapabilities] = useState<GardenScanCapabilities | null>(null);
+  const [lastScan, setLastScan] = useState<GardenScanSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -57,13 +66,28 @@ export function SmartScanCard() {
     }
   }
 
+  async function scanGarden() {
+    setBusy(true);
+    setMessage('Åbner den native scanner…');
+    try {
+      const summary = await startGardenScan();
+      setLastScan(summary);
+      setMessage(`Scan gemt: ${summary.keyframes} keyframes på ${durationLabel(summary.durationMs)}.`);
+      await refresh();
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : 'Scanningen kunne ikke gennemføres.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="mapping-assistant-card smart-scan-card">
       <div className="smart-scan-heading">
         <div>
           <p className="eyebrow">Smart Garden Scan · Android</p>
           <h2>Gå rundt. Have Guide bygger haven.</h2>
-          <p>Den nye scanner bliver hovedvejen til kortlægning: automatisk capture, rumlig tracking og maskinforståelse. Manuel tegning bliver korrektionsværktøjet.</p>
+          <p>Scanneroplevelsen bruger ARCore til løbende tracking og vælger selv de keyframes, som næste analyselag skal forstå og fusionere.</p>
         </div>
         <span className="smart-scan-icon" aria-hidden="true">⌾</span>
       </div>
@@ -100,9 +124,20 @@ export function SmartScanCard() {
           )}
 
           {capabilities.cameraPermissionGranted && capabilities.arCoreInstalled && (
+            <div className="smart-scan-actions">
+              <button type="button" className="primary-button" disabled={busy} onClick={() => void scanGarden()}>
+                {busy ? 'Scanner…' : 'Scan haven'}
+              </button>
+              <p className="field-help">Gå langsomt rundt. Scanneren gemmer automatisk gode observationer; du skal ikke tage billeder manuelt.</p>
+            </div>
+          )}
+
+          {lastScan && (
             <div className="smart-scan-next">
-              <strong>Native scannerfundament er klar</strong>
-              <span>Næste scannerlag bruger kontinuerlig AR-pose, automatiske keyframes, depth og semantik i samme gåtur.</span>
+              <strong>Seneste scan er klar til 4.2C</strong>
+              <span>
+                {lastScan.keyframes} keyframes · {durationLabel(lastScan.durationMs)} · Depth {lastScan.depthEnabled ? 'til' : 'fra'} · Semantik {lastScan.sceneSemanticsEnabled ? 'til' : 'fra'} · GPS {lastScan.locationCaptured ? 'gemt' : 'ikke gemt'}
+              </span>
             </div>
           )}
 
@@ -112,8 +147,8 @@ export function SmartScanCard() {
         </>
       ) : capabilities ? (
         <div className="smart-scan-web-note">
-          <strong>Smart Scan flytter til Android-appen</strong>
-          <span>PWA'en beholder luftfoto og manuel redigering som fallback. Selve scanningen bygges native, så vi kan bruge ARCore frem for upræcis browser-GPS.</span>
+          <strong>Smart Scan ligger i Android-appen</strong>
+          <span>PWA'en beholder luftfoto og manuel redigering som fallback. Den kontinuerlige AR-scanner kræver Android-appen.</span>
         </div>
       ) : null}
 
