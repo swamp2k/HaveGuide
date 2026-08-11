@@ -471,7 +471,9 @@ function SpatialTourViewer({
   }, [garden.id, onWorkspace, session]);
 
   if (!session || !frame) return null;
-  const label = frameLabel(frame);
+  const activeSession = session;
+  const activeFrame = frame;
+  const label = frameLabel(activeFrame);
 
   async function placeHotspot(event: ReactMouseEvent<HTMLImageElement>) {
     if (!linkFeatureId || busy) return;
@@ -481,7 +483,7 @@ function SpatialTourViewer({
     const yNorm = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
     setBusy(true);
     try {
-      const response = await captureApi.upsertHotspot(garden.id, session.id, frame.id, {
+      const response = await captureApi.upsertHotspot(garden.id, activeSession.id, activeFrame.id, {
         featureId: linkFeatureId,
         xNorm,
         yNorm,
@@ -501,7 +503,7 @@ function SpatialTourViewer({
     if (busy) return;
     setBusy(true);
     try {
-      const response = await captureApi.deleteHotspot(garden.id, session.id, frame.id, featureId);
+      const response = await captureApi.deleteHotspot(garden.id, activeSession.id, activeFrame.id, featureId);
       onWorkspace(response.workspace);
       setSelectedFeatureId('');
       setMessage('Objektmarkeringen er fjernet fra dette billede.');
@@ -512,7 +514,7 @@ function SpatialTourViewer({
     }
   }
 
-  const currentHotspot = frame.hotspots.find((hotspot) => hotspot.featureId === selectedFeatureId) ?? null;
+  const currentHotspot = activeFrame.hotspots.find((hotspot) => hotspot.featureId === selectedFeatureId) ?? null;
 
   return (
     <div className="spatial-tour-viewer" role="dialog" aria-modal="true" aria-label="Rumlig virtuel rundtur i haven">
@@ -536,11 +538,11 @@ function SpatialTourViewer({
         <section className="spatial-tour-image-pane">
           <div className={`spatial-tour-image-wrap${linkFeatureId ? ' linking' : ''}`}>
             <img
-              src={frame.contentUrl}
+              src={activeFrame.contentUrl}
               alt={`Station ${label.stationNo}, billede ${label.shotNo}`}
               onClick={(event) => void placeHotspot(event)}
             />
-            {frame.hotspots.map((hotspot) => {
+            {activeFrame.hotspots.map((hotspot) => {
               const feature = garden.features.find((item) => item.id === hotspot.featureId);
               if (!feature) return null;
               return (
@@ -562,13 +564,13 @@ function SpatialTourViewer({
           </div>
 
           <button type="button" className="tour-previous" onClick={() => setIndex((current) => Math.max(0, current - 1))} disabled={index === 0} aria-label="Forrige billede">‹</button>
-          <button type="button" className="tour-next" onClick={() => setIndex((current) => Math.min(session.frames.length - 1, current + 1))} disabled={index === session.frames.length - 1} aria-label="Næste billede">›</button>
+          <button type="button" className="tour-next" onClick={() => setIndex((current) => Math.min(activeSession.frames.length - 1, current + 1))} disabled={index === activeSession.frames.length - 1} aria-label="Næste billede">›</button>
 
           <div className="tour-frame-information">
-            <strong>{qualityLabel(frame)}</strong>
-            <span>{frame.bearingDegrees === null ? 'Retning ukendt' : `Retning ${Math.round(frame.bearingDegrees)}°`}</span>
-            <span>{frame.accuracyM === null ? 'GPS ukendt' : `GPS ±${Math.round(frame.accuracyM)} m`}</span>
-            <span>{frame.hotspots.length} objekt{frame.hotspots.length === 1 ? '' : 'er'}</span>
+            <strong>{qualityLabel(activeFrame)}</strong>
+            <span>{activeFrame.bearingDegrees === null ? 'Retning ukendt' : `Retning ${Math.round(activeFrame.bearingDegrees)}°`}</span>
+            <span>{activeFrame.accuracyM === null ? 'GPS ukendt' : `GPS ±${Math.round(activeFrame.accuracyM)} m`}</span>
+            <span>{activeFrame.hotspots.length} objekt{activeFrame.hotspots.length === 1 ? '' : 'er'}</span>
           </div>
         </section>
 
@@ -579,8 +581,8 @@ function SpatialTourViewer({
           </div>
           <SpatialTourMap
             garden={garden}
-            session={session}
-            frame={frame}
+            session={activeSession}
+            frame={activeFrame}
             aerialAvailable={workspace.aerialAvailable}
             selectedFeatureId={selectedFeatureId}
             onFeatureSelect={selectMapFeature}
@@ -647,7 +649,7 @@ function SpatialTourViewer({
       </main>
 
       <nav ref={filmstripRef} className="spatial-tour-filmstrip" aria-label="Billeder i rundturen">
-        {session.frames.map((item, itemIndex) => {
+        {activeSession.frames.map((item, itemIndex) => {
           const itemLabel = frameLabel(item);
           return (
             <button
