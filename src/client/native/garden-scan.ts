@@ -4,6 +4,7 @@ export interface GardenScanCapabilities {
   platform: 'android' | 'web';
   native: boolean;
   cameraPermissionGranted: boolean;
+  locationPermissionGranted: boolean;
   arCoreAvailability: string;
   arCoreSupported: boolean;
   arCoreInstalled: boolean;
@@ -12,12 +13,24 @@ export interface GardenScanCapabilities {
   probeError?: string;
 }
 
+export interface GardenScanSummary {
+  sessionId: string;
+  sessionPath: string;
+  keyframes: number;
+  frames: number;
+  durationMs: number;
+  depthEnabled: boolean;
+  sceneSemanticsEnabled: boolean;
+  locationCaptured: boolean;
+}
+
 type NativeGardenScanCapabilities = Omit<GardenScanCapabilities, 'native'>;
 
 interface GardenScanNativePlugin {
   getCapabilities(): Promise<NativeGardenScanCapabilities>;
   requestScanPermission(): Promise<NativeGardenScanCapabilities>;
   ensureArCore(): Promise<{ status: string }>;
+  startScan(): Promise<GardenScanSummary>;
 }
 
 const NativeGardenScan = registerPlugin<GardenScanNativePlugin>('GardenScan');
@@ -31,6 +44,7 @@ function webCapabilities(): GardenScanCapabilities {
     platform: 'web',
     native: false,
     cameraPermissionGranted: false,
+    locationPermissionGranted: false,
     arCoreAvailability: 'WEB_ONLY',
     arCoreSupported: false,
     arCoreInstalled: false,
@@ -54,4 +68,9 @@ export async function requestGardenScanPermission(): Promise<GardenScanCapabilit
 export async function ensureGardenScanArCore(): Promise<{ status: string }> {
   if (!isAndroidNative()) throw new Error('Smart Garden Scan kræver Have Guide Android-appen.');
   return NativeGardenScan.ensureArCore();
+}
+
+export async function startGardenScan(): Promise<GardenScanSummary> {
+  if (!isAndroidNative()) throw new Error('Smart Garden Scan kræver Have Guide Android-appen.');
+  return NativeGardenScan.startScan();
 }
