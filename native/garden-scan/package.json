@@ -2,6 +2,7 @@
   "name": "@have-guide/garden-scan",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Android native bridge for Have Guide Smart Garden Scan.",
   "main": "index.js",
   "files": [
