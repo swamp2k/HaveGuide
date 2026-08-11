@@ -8,16 +8,17 @@ import type {
   updateTaskSchema,
 } from '../shared/journey-schemas';
 import { ApiError } from './api';
+import { normalizeRuntimeUrls, runtimeUrl } from './runtime-url';
 
 async function request(path: string, init?: RequestInit): Promise<{ journey: GardenJourney }> {
   const headers = new Headers(init?.headers);
   if (init?.body) headers.set('Content-Type', 'application/json');
-  const response = await fetch(path, { ...init, credentials: 'same-origin', headers });
+  const response = await fetch(runtimeUrl(path), { ...init, credentials: 'include', headers });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: 'Forespørgslen mislykkedes.' })) as { error: string; code?: string };
     throw new ApiError(body.error, response.status, body.code);
   }
-  return response.json() as Promise<{ journey: GardenJourney }>;
+  return normalizeRuntimeUrls((await response.json()) as { journey: GardenJourney });
 }
 
 export const journeyApi = {
