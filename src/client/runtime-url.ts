@@ -27,6 +27,22 @@ export function runtimeUrl(path: string): string {
   return nativeApiUrl(path);
 }
 
+function requestInitFromRequest(request: Request): RequestInit {
+  return {
+    method: request.method,
+    headers: request.headers,
+    body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+    credentials: request.credentials,
+    cache: request.cache,
+    redirect: request.redirect,
+    referrer: request.referrer,
+    referrerPolicy: request.referrerPolicy,
+    integrity: request.integrity,
+    keepalive: request.keepalive,
+    signal: request.signal,
+  };
+}
+
 export function installNativeFetchUrlBridge(): void {
   if (!isNativeRuntime()) return;
   const nativeFetch = globalThis.fetch.bind(globalThis);
@@ -36,7 +52,8 @@ export function installNativeFetchUrlBridge(): void {
     if (input instanceof URL) return nativeFetch(runtimeUrl(input.toString()), init);
     if (input instanceof Request) {
       const nextUrl = runtimeUrl(input.url);
-      return nativeFetch(nextUrl === input.url ? input : new Request(nextUrl, input), init);
+      if (nextUrl === input.url) return nativeFetch(input, init);
+      return nativeFetch(nextUrl, { ...requestInitFromRequest(input), ...init });
     }
     return nativeFetch(input, init);
   }) as typeof globalThis.fetch;
