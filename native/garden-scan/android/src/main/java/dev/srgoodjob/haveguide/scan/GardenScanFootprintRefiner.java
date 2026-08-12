@@ -145,7 +145,7 @@ final class GardenScanFootprintRefiner {
             for (RefinedFeature specific : features) {
                 if (generic == specific || specific.suppressed) continue;
                 if (!isSpecificFor(generic.type, specific.type)) continue;
-                double overlap = overlapRatio(generic, specific);
+                double overlap = overlapRatioOfGeneric(generic, specific);
                 if (overlap < DUPLICATE_OVERLAP_RATIO) continue;
                 if (specific.confidence + 0.05 < generic.confidence && !specific.visionClassified) continue;
                 generic.suppressed = true;
@@ -175,13 +175,12 @@ final class GardenScanFootprintRefiner {
         }
     }
 
-    private static double overlapRatio(RefinedFeature left, RefinedFeature right) {
-        double intersectionX = Math.max(0, Math.min(left.maxX, right.maxX) - Math.max(left.minX, right.minX));
-        double intersectionZ = Math.max(0, Math.min(left.maxZ, right.maxZ) - Math.max(left.minZ, right.minZ));
+    private static double overlapRatioOfGeneric(RefinedFeature generic, RefinedFeature specific) {
+        double intersectionX = Math.max(0, Math.min(generic.maxX, specific.maxX) - Math.max(generic.minX, specific.minX));
+        double intersectionZ = Math.max(0, Math.min(generic.maxZ, specific.maxZ) - Math.max(generic.minZ, specific.minZ));
         double intersection = intersectionX * intersectionZ;
-        double leftArea = Math.max(0.01, (left.maxX - left.minX) * (left.maxZ - left.minZ));
-        double rightArea = Math.max(0.01, (right.maxX - right.minX) * (right.maxZ - right.minZ));
-        return intersection / Math.min(leftArea, rightArea);
+        double genericArea = Math.max(0.01, (generic.maxX - generic.minX) * (generic.maxZ - generic.minZ));
+        return intersection / genericArea;
     }
 
     private static int layerPriority(String layer) {
