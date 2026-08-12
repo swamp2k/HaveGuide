@@ -558,7 +558,7 @@ public final class GardenScanActivity extends Activity implements GLSurfaceView.
         return result;
     }
 
-    private JSONArray array(float[] values) {
+    private JSONArray array(float[] values) throws JSONException {
         JSONArray result = new JSONArray();
         for (float value : values) result.put(value);
         return result;
