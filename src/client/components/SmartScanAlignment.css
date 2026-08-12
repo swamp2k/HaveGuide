@@ -1,0 +1,136 @@
+.smart-scan-alignment {
+  display: grid;
+  gap: .85rem;
+  margin-top: 1rem;
+  padding: .9rem;
+  border: 1px solid #b8cdbb;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 86%);
+}
+
+.smart-scan-alignment-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: .8rem;
+}
+
+.smart-scan-alignment-heading h3 {
+  margin: .1rem 0 .25rem;
+}
+
+.smart-scan-alignment-heading p:last-child {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: .86rem;
+  line-height: 1.45;
+}
+
+.smart-scan-alignment-status {
+  flex: 0 0 auto;
+  padding: .3rem .55rem;
+  border-radius: 999px;
+  background: #eee9dc;
+  color: #695d46;
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.smart-scan-alignment-status.aligned {
+  background: #dcebdc;
+  color: var(--green-900);
+}
+
+.smart-scan-alignment-map {
+  position: relative;
+  width: 100%;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid #cbd3c5;
+  border-radius: 14px;
+  background: #edf0e5;
+}
+
+.smart-scan-alignment-map.placing {
+  outline: 3px solid rgb(214 153 53 / 45%);
+  cursor: crosshair;
+}
+
+.smart-scan-alignment-controls {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+}
+
+.smart-scan-alignment-nudge {
+  display: grid;
+  grid-template-columns: repeat(3, 42px);
+  grid-template-rows: repeat(2, 42px);
+  gap: .25rem;
+}
+
+.smart-scan-alignment-nudge button,
+.smart-scan-inline-controls button {
+  border: 1px solid #9db4a2;
+  border-radius: 10px;
+  background: white;
+  color: var(--green-900);
+  font: inherit;
+  font-weight: 800;
+}
+
+.smart-scan-alignment-tuning {
+  display: grid;
+  gap: .7rem;
+}
+
+.smart-scan-alignment-tuning label {
+  display: grid;
+  gap: .35rem;
+  color: var(--text-muted);
+  font-size: .82rem;
+}
+
+.smart-scan-inline-controls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: .45rem;
+}
+
+.smart-scan-inline-controls button {
+  min-height: 40px;
+}
+
+.smart-scan-inline-controls strong {
+  min-width: 3rem;
+  text-align: center;
+  color: var(--text);
+}
+
+.smart-scan-alignment-tuning input[type='range'] {
+  width: 100%;
+  accent-color: var(--green-900);
+}
+
+.smart-scan-alignment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem;
+}
+
+.smart-scan-alignment > .field-help {
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .smart-scan-alignment { padding: .7rem; }
+  .smart-scan-alignment-heading { align-items: center; }
+  .smart-scan-alignment-map { min-height: 320px; }
+  .smart-scan-alignment-controls { grid-template-columns: 1fr; }
+  .smart-scan-alignment-nudge { justify-content: center; }
+  .smart-scan-alignment-actions > button { width: 100%; }
+}
