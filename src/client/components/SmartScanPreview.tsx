@@ -31,6 +31,15 @@ function typeClass(type: string): string {
   return type.replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
 }
 
+function layerOrder(feature: GardenScanDraftFeature): number {
+  switch (feature.layer) {
+    case 'surface': return 0;
+    case 'vegetation': return 1;
+    case 'structure': return 2;
+    default: return 3;
+  }
+}
+
 function featureBounds(features: GardenScanDraftFeature[]) {
   const minX = Math.min(...features.map((feature) => feature.bounds.min[0]));
   const maxX = Math.max(...features.map((feature) => feature.bounds.max[0]));
@@ -41,8 +50,8 @@ function featureBounds(features: GardenScanDraftFeature[]) {
 
 export function SmartScanPreview({ understanding }: SmartScanPreviewProps) {
   const features = [...understanding.draftFeatures]
-    .sort((left, right) => right.samples - left.samples)
-    .slice(0, 48);
+    .sort((left, right) => layerOrder(left) - layerOrder(right) || right.samples - left.samples)
+    .slice(0, 64);
   if (features.length === 0) return null;
 
   const bounds = featureBounds(features);
@@ -53,13 +62,21 @@ export function SmartScanPreview({ understanding }: SmartScanPreviewProps) {
   const counts = Object.entries(understanding.typeCounts)
     .sort((left, right) => right[1] - left[1])
     .slice(0, 8);
+  const footprintCount = understanding.featuresWithVoxelFootprints ?? features.filter((feature) => (feature.footprint?.length ?? 0) >= 3).length;
+  const suppressed = understanding.suppressedGenericDuplicates ?? 0;
+
+  function mapPoint(point: [number, number]): string {
+    const x = pad + ((point[0] - bounds.minX) / rangeX) * usable;
+    const y = pad + ((bounds.maxZ - point[1]) / rangeZ) * usable;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  }
 
   return (
     <div className="smart-scan-preview">
       <div className="smart-scan-preview-heading">
         <div>
-          <strong>4.2C.2 · Draft garden features</strong>
-          <span>{understanding.features} kandidater · {understanding.visionClassifiedClusters} RGB-klassificerede clusters · {understanding.reviewRequired} kræver review</span>
+          <strong>4.2C.3 · Refined garden footprints</strong>
+          <span>{understanding.features} kandidater · {footprintCount} voxel-footprints · {understanding.reviewRequired} kræver review{suppressed > 0 ? ` · ${suppressed} generiske dubletter fjernet` : ''}</span>
         </div>
         <span className="smart-scan-preview-badge">Top-down</span>
       </div>
@@ -72,11 +89,19 @@ export function SmartScanPreview({ understanding }: SmartScanPreviewProps) {
           const width = Math.max(1.5, ((feature.bounds.max[0] - feature.bounds.min[0]) / rangeX) * usable);
           const height = Math.max(1.5, ((feature.bounds.max[2] - feature.bounds.min[2]) / rangeZ) * usable);
           const cssType = typeClass(feature.type);
+          const footprint = feature.footprint && feature.footprint.length >= 3 ? feature.footprint.map(mapPoint).join(' ') : null;
+          const title = `${typeLabel(feature.type)} · ${Math.round(feature.confidence * 100)}% · ${feature.samples.toLocaleString('da-DK')} samples${feature.footprintAreaM2 ? ` · ${feature.footprintAreaM2.toFixed(1)} m² footprint` : ''}`;
           return (
-            <g key={feature.id} className={`smart-scan-feature smart-scan-feature-${cssType}${feature.reviewRequired ? ' review' : ''}`}>
-              <rect x={x} y={y} width={width} height={height} rx={Math.min(3, Math.min(width, height) / 3)}>
-                <title>{typeLabel(feature.type)} · {Math.round(feature.confidence * 100)}% · {feature.samples.toLocaleString('da-DK')} samples</title>
-              </rect>
+            <g key={feature.id} className={`smart-scan-feature smart-scan-feature-${cssType} smart-scan-layer-${feature.layer ?? 'object'}${feature.reviewRequired ? ' review' : ''}`}>
+              {footprint ? (
+                <polygon points={footprint}>
+                  <title>{title}</title>
+                </polygon>
+              ) : (
+                <rect x={x} y={y} width={width} height={height} rx={Math.min(3, Math.min(width, height) / 3)}>
+                  <title>{title}</title>
+                </rect>
+              )}
             </g>
           );
         })}
@@ -85,7 +110,7 @@ export function SmartScanPreview({ understanding }: SmartScanPreviewProps) {
       <div className="smart-scan-preview-legend">
         {counts.map(([type, count]) => <span key={type}><i className={`smart-scan-legend-swatch smart-scan-feature-${typeClass(type)}`} />{typeLabel(type)} {count}</span>)}
       </div>
-      <p className="field-help">Stiplede områder er stadig usikre. Kortet er scannerens lokale X/Z-plan og er endnu ikke georefereret til luftfoto.</p>
+      <p className="field-help">Polygonerne følger nu de observerede voxel-footprints i stedet for kun cluster-bokse. Stiplede områder er stadig usikre. Kortet er scannerens lokale X/Z-plan og er endnu ikke georefereret til luftfoto.</p>
     </div>
   );
 }
