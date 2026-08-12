@@ -19,6 +19,7 @@ import com.google.ar.core.ArCoreApk;
 import com.google.ar.core.Config;
 import com.google.ar.core.Session;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -118,7 +119,7 @@ public class GardenScanPlugin extends Plugin {
     @PluginMethod
     public void reconstructLatestScan(PluginCall call) {
         try {
-            File sessionDir = GardenScanReconstructor.findLatestSession(getContext().getFilesDir());
+            File sessionDir = latestSession();
             if (sessionDir == null) {
                 call.reject("Der er ingen Smart Garden Scan-session på telefonen endnu.");
                 return;
@@ -139,6 +140,61 @@ public class GardenScanPlugin extends Plugin {
             call.resolve(result);
         } catch (Exception error) {
             call.reject("Den seneste scan kunne ikke rekonstrueres: " + error.getMessage(), error);
+        }
+    }
+
+    @PluginMethod
+    public void prepareLatestVisionCandidates(PluginCall call) {
+        try {
+            File sessionDir = latestSession();
+            if (sessionDir == null) {
+                call.reject("Der er ingen Smart Garden Scan-session på telefonen endnu.");
+                return;
+            }
+            Integer requested = call.getInt("limit");
+            int limit = requested == null ? 16 : requested;
+            JSONObject summary = GardenScanUnderstanding.prepareVisionCandidates(getContext(), sessionDir, limit);
+            JSObject result = new JSObject();
+            result.put("sessionId", summary.getString("sessionId"));
+            result.put("coordinateFrame", summary.getString("coordinateFrame"));
+            result.put("candidateCount", summary.getInt("candidateCount"));
+            result.put("bounds", summary.optJSONObject("bounds"));
+            result.put("candidates", summary.getJSONArray("candidates"));
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("RGB-kandidaterne kunne ikke klargøres: " + error.getMessage(), error);
+        }
+    }
+
+    @PluginMethod
+    public void applyLatestVisionClassifications(PluginCall call) {
+        try {
+            File sessionDir = latestSession();
+            if (sessionDir == null) {
+                call.reject("Der er ingen Smart Garden Scan-session på telefonen endnu.");
+                return;
+            }
+            String requestedSessionId = call.getString("sessionId", "");
+            if (!requestedSessionId.isEmpty() && !sessionDir.getName().equals(requestedSessionId)) {
+                call.reject("Scan-sessionen ændrede sig under analysen. Prøv igen.");
+                return;
+            }
+            String classificationsJson = call.getString("classificationsJson", "[]");
+            JSONArray classifications = new JSONArray(classificationsJson);
+            JSONObject summary = GardenScanUnderstanding.applyVisionClassifications(sessionDir, classifications);
+            JSObject result = new JSObject();
+            result.put("sessionId", summary.getString("sessionId"));
+            result.put("sourceClusters", summary.getInt("sourceClusters"));
+            result.put("visionClassifiedClusters", summary.getInt("visionClassifiedClusters"));
+            result.put("features", summary.getInt("features"));
+            result.put("reviewRequired", summary.getInt("reviewRequired"));
+            result.put("typeCounts", summary.getJSONObject("typeCounts"));
+            result.put("bounds", summary.optJSONObject("bounds"));
+            result.put("draftFeatures", summary.getJSONArray("draftFeatures"));
+            result.put("draftFile", summary.getString("draftFile"));
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Feature-fusionen kunne ikke gennemføres: " + error.getMessage(), error);
         }
     }
 
@@ -210,5 +266,9 @@ public class GardenScanPlugin extends Plugin {
         result.put("locationCaptured", locationCaptured);
         result.put("completed", true);
         call.resolve(result);
+    }
+
+    private File latestSession() {
+        return GardenScanReconstructor.findLatestSession(getContext().getFilesDir());
     }
 }
