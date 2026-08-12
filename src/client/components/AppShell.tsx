@@ -52,7 +52,7 @@ export function AppShell({ user, gardens, garden, onSelectGarden, onGardenChange
 
       <div className="app-content">
         {tab === 'garden' && <><GardenMap garden={garden} onGardenChanged={onGardenChanged} /><AerialEditor garden={garden} onGardenChanged={onGardenChanged} /></>}
-        {tab === 'understanding' && <><SmartScanCard /><MappingAssistant garden={garden} /><UnderstandingPage garden={garden} /></>}
+        {tab === 'understanding' && <><SmartScanCard gardenId={garden.id} /><MappingAssistant garden={garden} /><UnderstandingPage garden={garden} /></>}
         {tab === 'design' && <DesignPage garden={garden} />}
         {tab === 'journey' && <JourneyPage garden={garden} />}
         {tab === 'settings' && <SettingsPage user={user} garden={garden} onGardenChanged={onGardenChanged} onLogout={onLogout} />}
