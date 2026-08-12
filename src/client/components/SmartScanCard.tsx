@@ -122,16 +122,16 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
 
   async function understandLatest() {
     setBusy(true);
-    setMessage('4.2C.2: rekonstruerer geometri og vælger RGB-udsnit…');
+    setMessage('4.2C.3: rekonstruerer geometri og vælger RGB-udsnit…');
     try {
       const spatial = await reconstructLatestGardenScan();
       setReconstruction(spatial);
-      const batch = await prepareLatestGardenScanVisionCandidates(16);
+      const batch = await prepareLatestGardenScanVisionCandidates(20);
 
       let classifications: GardenScanVisionClassification[] = [];
       let visionFailed = false;
       if (batch.candidates.length > 0) {
-        setMessage(`4.2C.2: analyserer ${batch.candidates.length} målrettede haveudsnit…`);
+        setMessage(`4.2C.3: analyserer ${batch.candidates.length} målrettede haveudsnit…`);
         try {
           const vision = await api.classifySmartScanCandidates(gardenId, batch.sessionId, batch.candidates);
           classifications = vision.classifications;
@@ -140,12 +140,14 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
         }
       }
 
-      setMessage('4.2C.2: fusionerer observationer til draft garden features…');
+      setMessage('4.2C.3: fusionerer observationer og udleder voxel-footprints…');
       const result = await applyLatestGardenScanVisionClassifications(batch.sessionId, classifications);
       setUnderstanding(result);
+      const footprintText = result.featuresWithVoxelFootprints == null ? '' : `, ${result.featuresWithVoxelFootprints} med voxel-footprint`;
+      const suppressedText = result.suppressedGenericDuplicates ? `, ${result.suppressedGenericDuplicates} generiske dubletter fjernet` : '';
       setMessage(visionFailed
-        ? `4.2C.2 byggede ${result.features} feature-kandidater. Cloudflare Vision svarede ikke, så RGB-klasser kan prøves igen senere.`
-        : `4.2C.2 færdig: ${result.features} draft features, ${result.visionClassifiedClusters} clusters kontrolleret med RGB.`);
+        ? `4.2C.3 byggede ${result.features} feature-kandidater${footprintText}. Cloudflare Vision svarede ikke, så RGB-klasser kan prøves igen senere.`
+        : `4.2C.3 færdig: ${result.features} draft features${footprintText}${suppressedText}.`);
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : 'Objektforståelsen kunne ikke gennemføres.');
     } finally {
@@ -159,7 +161,7 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
         <div>
           <p className="eyebrow">Smart Garden Scan · Android</p>
           <h2>Gå rundt. Have Guide bygger haven.</h2>
-          <p>ARCore bygger geometrien. RGB-udsnit hjælper med at skelne blandt andet træ, busk, hæk, græs, bed, bygning, hegn og større objekter.</p>
+          <p>ARCore bygger geometrien. RGB-udsnit hjælper med klassifikation, og voxel-footprints omsætter de rå clusters til mere realistiske former i haven.</p>
         </div>
         <span className="smart-scan-icon" aria-hidden="true">⌾</span>
       </div>
@@ -204,9 +206,9 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
                 {busy ? 'Arbejder…' : 'Spatial rekonstruktion'}
               </button>
               <button type="button" className="smart-scan-secondary-button" disabled={busy} onClick={() => void understandLatest()}>
-                {busy ? 'Arbejder…' : 'Forstå objekter · 4.2C.2'}
+                {busy ? 'Arbejder…' : 'Forstå haven · 4.2C.3'}
               </button>
-              <p className="field-help">Objektforståelsen sender kun små målrettede crops til Cloudflare Vision. Hele scan-sessionen og Depth-data bliver på telefonen.</p>
+              <p className="field-help">Objektforståelsen sender kun små målrettede crops til Cloudflare Vision. Hele scan-sessionen, Depth og voxel-geometrien bliver på telefonen.</p>
             </div>
           )}
 
