@@ -174,12 +174,14 @@ public class GardenScanPlugin extends Plugin {
                 call.reject("Der er ingen Smart Garden Scan-session på telefonen endnu.");
                 return;
             }
-            String requestedSessionId = call.getString("sessionId", "");
+            String requestedSessionId = call.getString("sessionId");
+            if (requestedSessionId == null) requestedSessionId = "";
             if (!requestedSessionId.isEmpty() && !sessionDir.getName().equals(requestedSessionId)) {
                 call.reject("Scan-sessionen ændrede sig under analysen. Prøv igen.");
                 return;
             }
-            String classificationsJson = call.getString("classificationsJson", "[]");
+            String classificationsJson = call.getString("classificationsJson");
+            if (classificationsJson == null) classificationsJson = "[]";
             JSONArray classifications = new JSONArray(classificationsJson);
             JSONObject summary = GardenScanUnderstanding.applyVisionClassifications(sessionDir, classifications);
             JSObject result = new JSObject();
