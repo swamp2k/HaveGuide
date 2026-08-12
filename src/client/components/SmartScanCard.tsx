@@ -1,16 +1,26 @@
 import { useEffect, useState } from 'react';
+import { api } from '../api';
 import {
+  applyLatestGardenScanVisionClassifications,
   ensureGardenScanArCore,
   getGardenScanCapabilities,
+  prepareLatestGardenScanVisionCandidates,
   reconstructLatestGardenScan,
   requestGardenScanPermission,
   startGardenScan,
   type GardenScanCapabilities,
   type GardenScanReconstructionSummary,
   type GardenScanSummary,
+  type GardenScanUnderstandingSummary,
+  type GardenScanVisionClassification,
 } from '../native/garden-scan';
+import { SmartScanPreview } from './SmartScanPreview';
 import { StatusMessage } from './StatusMessage';
 import './SmartScanCard.css';
+
+interface SmartScanCardProps {
+  gardenId: string;
+}
 
 function capabilityLabel(value: boolean): string {
   return value ? 'Klar' : 'Ikke tilgængelig';
@@ -30,10 +40,11 @@ function semanticSummary(samples: Record<string, number>): string {
     .join(' · ');
 }
 
-export function SmartScanCard() {
+export function SmartScanCard({ gardenId }: SmartScanCardProps) {
   const [capabilities, setCapabilities] = useState<GardenScanCapabilities | null>(null);
   const [lastScan, setLastScan] = useState<GardenScanSummary | null>(null);
   const [reconstruction, setReconstruction] = useState<GardenScanReconstructionSummary | null>(null);
+  const [understanding, setUnderstanding] = useState<GardenScanUnderstandingSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -84,6 +95,7 @@ export function SmartScanCard() {
       const summary = await startGardenScan();
       setLastScan(summary);
       setReconstruction(null);
+      setUnderstanding(null);
       setMessage(`Scan gemt: ${summary.keyframes} keyframes på ${durationLabel(summary.durationMs)}.`);
       await refresh();
     } catch (caught) {
@@ -99,9 +111,43 @@ export function SmartScanCard() {
     try {
       const result = await reconstructLatestGardenScan();
       setReconstruction(result);
+      setUnderstanding(null);
       setMessage(`4.2C.1 færdig: ${result.clusters} spatial clusters fra ${result.voxels.toLocaleString('da-DK')} voxels.`);
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : 'Den seneste scanning kunne ikke rekonstrueres.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function understandLatest() {
+    setBusy(true);
+    setMessage('4.2C.2: rekonstruerer geometri og vælger RGB-udsnit…');
+    try {
+      const spatial = await reconstructLatestGardenScan();
+      setReconstruction(spatial);
+      const batch = await prepareLatestGardenScanVisionCandidates(16);
+
+      let classifications: GardenScanVisionClassification[] = [];
+      let visionFailed = false;
+      if (batch.candidates.length > 0) {
+        setMessage(`4.2C.2: analyserer ${batch.candidates.length} målrettede haveudsnit…`);
+        try {
+          const vision = await api.classifySmartScanCandidates(gardenId, batch.sessionId, batch.candidates);
+          classifications = vision.classifications;
+        } catch {
+          visionFailed = true;
+        }
+      }
+
+      setMessage('4.2C.2: fusionerer observationer til draft garden features…');
+      const result = await applyLatestGardenScanVisionClassifications(batch.sessionId, classifications);
+      setUnderstanding(result);
+      setMessage(visionFailed
+        ? `4.2C.2 byggede ${result.features} feature-kandidater. Cloudflare Vision svarede ikke, så RGB-klasser kan prøves igen senere.`
+        : `4.2C.2 færdig: ${result.features} draft features, ${result.visionClassifiedClusters} clusters kontrolleret med RGB.`);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : 'Objektforståelsen kunne ikke gennemføres.');
     } finally {
       setBusy(false);
     }
@@ -113,7 +159,7 @@ export function SmartScanCard() {
         <div>
           <p className="eyebrow">Smart Garden Scan · Android</p>
           <h2>Gå rundt. Have Guide bygger haven.</h2>
-          <p>Scanneroplevelsen bruger ARCore til løbende tracking og vælger selv de keyframes, som analyselaget kan fusionere til en rumlig model.</p>
+          <p>ARCore bygger geometrien. RGB-udsnit hjælper med at skelne blandt andet træ, busk, hæk, græs, bed, bygning, hegn og større objekter.</p>
         </div>
         <span className="smart-scan-icon" aria-hidden="true">⌾</span>
       </div>
@@ -155,9 +201,12 @@ export function SmartScanCard() {
                 {busy ? 'Arbejder…' : 'Scan haven'}
               </button>
               <button type="button" className="smart-scan-secondary-button" disabled={busy} onClick={() => void reconstructLatest()}>
-                {busy ? 'Arbejder…' : 'Analyser seneste scan'}
+                {busy ? 'Arbejder…' : 'Spatial rekonstruktion'}
               </button>
-              <p className="field-help">Analysen kører lokalt på telefonen og bygger først geometri og grove ARCore-klasser. RGB/AI-klassifikation kommer ovenpå senere.</p>
+              <button type="button" className="smart-scan-secondary-button" disabled={busy} onClick={() => void understandLatest()}>
+                {busy ? 'Arbejder…' : 'Forstå objekter · 4.2C.2'}
+              </button>
+              <p className="field-help">Objektforståelsen sender kun små målrettede crops til Cloudflare Vision. Hele scan-sessionen og Depth-data bliver på telefonen.</p>
             </div>
           )}
 
@@ -178,10 +227,12 @@ export function SmartScanCard() {
               </span>
               <span>{semanticSummary(reconstruction.semanticSamples)}</span>
               {reconstruction.coordinateFrame === 'legacy-arcore-world' && (
-                <span>Den eksisterende testscan bruger 4.2B's oprindelige ARCore-koordinater. Resultatet er egnet til første fusionstest, men betragtes endnu ikke som landmålingspræcist.</span>
+                <span>Den eksisterende testscan bruger 4.2B's oprindelige ARCore-koordinater. Resultatet er egnet til fusionstest, men betragtes endnu ikke som landmålingspræcist.</span>
               )}
             </div>
           )}
+
+          {understanding && <SmartScanPreview understanding={understanding} />}
 
           {!capabilities.arCoreSupported && (
             <StatusMessage kind="error">Denne telefon understøtter ikke ARCore. Have Guide kan stadig bruges med luftfoto og manuel korrektion.</StatusMessage>
