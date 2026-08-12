@@ -44,13 +44,14 @@ async function ownsGarden(c: Context<AppEnvironment>): Promise<boolean> {
   return gardenBelongsToUser(c.env.DB, c.get('user').id, c.req.param('gardenId'));
 }
 
-function decodeBase64(value: string): Uint8Array {
+function decodeBase64(value: string): ArrayBuffer {
   const comma = value.indexOf(',');
   const encoded = comma >= 0 ? value.slice(comma + 1) : value;
   const binary = atob(encoded);
-  const bytes = new Uint8Array(binary.length);
+  const buffer = new ArrayBuffer(binary.length);
+  const bytes = new Uint8Array(buffer);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
+  return buffer;
 }
 
 const keywordGroups: Array<{ type: VisionType; weight: number; terms: string[] }> = [
@@ -105,8 +106,8 @@ function classifyDescription(description: string, semanticLabel: string, prelimi
 
   const ranked = [...scores.entries()].sort((left, right) => right[1] - left[1]);
   const fallback = fallbackType(semanticLabel, preliminaryType);
-  if (ranked.length === 0 || ranked[0][1] < 3) return { type: fallback, confidence: 0.42 };
   const winner = ranked[0];
+  if (!winner || winner[1] < 3) return { type: fallback, confidence: 0.42 };
   const runnerUp = ranked[1]?.[1] ?? 0;
   const margin = Math.max(0, winner[1] - runnerUp);
   const confidence = Math.min(0.96, 0.62 + winner[1] * 0.035 + margin * 0.025);
@@ -114,7 +115,6 @@ function classifyDescription(description: string, semanticLabel: string, prelimi
 }
 
 smartScanRoutes.post('/:gardenId/smart-scan/classify', async (c) => {
-  const gardenId = c.req.param('gardenId');
   if (!(await ownsGarden(c))) return jsonError(c, 404, 'Haven blev ikke fundet.', 'GARDEN_NOT_FOUND');
 
   const parsed = classifySmartScanSchema.safeParse(await parseJson<unknown>(c));
