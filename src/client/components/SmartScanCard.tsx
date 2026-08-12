@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import {
   ensureGardenScanArCore,
   getGardenScanCapabilities,
+  reconstructLatestGardenScan,
   requestGardenScanPermission,
   startGardenScan,
   type GardenScanCapabilities,
+  type GardenScanReconstructionSummary,
   type GardenScanSummary,
 } from '../native/garden-scan';
 import { StatusMessage } from './StatusMessage';
@@ -20,9 +22,18 @@ function durationLabel(durationMs: number): string {
   return `${Math.floor(seconds / 60)} min. ${seconds % 60} sek.`;
 }
 
+function semanticSummary(samples: Record<string, number>): string {
+  return Object.entries(samples)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 4)
+    .map(([label, count]) => `${label.toLowerCase()} ${count.toLocaleString('da-DK')}`)
+    .join(' · ');
+}
+
 export function SmartScanCard() {
   const [capabilities, setCapabilities] = useState<GardenScanCapabilities | null>(null);
   const [lastScan, setLastScan] = useState<GardenScanSummary | null>(null);
+  const [reconstruction, setReconstruction] = useState<GardenScanReconstructionSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -72,10 +83,25 @@ export function SmartScanCard() {
     try {
       const summary = await startGardenScan();
       setLastScan(summary);
+      setReconstruction(null);
       setMessage(`Scan gemt: ${summary.keyframes} keyframes på ${durationLabel(summary.durationMs)}.`);
       await refresh();
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : 'Scanningen kunne ikke gennemføres.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reconstructLatest() {
+    setBusy(true);
+    setMessage('Bygger den rumlige model fra Depth, pose og semantik…');
+    try {
+      const result = await reconstructLatestGardenScan();
+      setReconstruction(result);
+      setMessage(`4.2C.1 færdig: ${result.clusters} spatial clusters fra ${result.voxels.toLocaleString('da-DK')} voxels.`);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : 'Den seneste scanning kunne ikke rekonstrueres.');
     } finally {
       setBusy(false);
     }
@@ -87,7 +113,7 @@ export function SmartScanCard() {
         <div>
           <p className="eyebrow">Smart Garden Scan · Android</p>
           <h2>Gå rundt. Have Guide bygger haven.</h2>
-          <p>Scanneroplevelsen bruger ARCore til løbende tracking og vælger selv de keyframes, som næste analyselag skal forstå og fusionere.</p>
+          <p>Scanneroplevelsen bruger ARCore til løbende tracking og vælger selv de keyframes, som analyselaget kan fusionere til en rumlig model.</p>
         </div>
         <span className="smart-scan-icon" aria-hidden="true">⌾</span>
       </div>
@@ -126,18 +152,34 @@ export function SmartScanCard() {
           {capabilities.cameraPermissionGranted && capabilities.arCoreInstalled && (
             <div className="smart-scan-actions">
               <button type="button" className="primary-button" disabled={busy} onClick={() => void scanGarden()}>
-                {busy ? 'Scanner…' : 'Scan haven'}
+                {busy ? 'Arbejder…' : 'Scan haven'}
               </button>
-              <p className="field-help">Gå langsomt rundt. Scanneren gemmer automatisk gode observationer; du skal ikke tage billeder manuelt.</p>
+              <button type="button" className="smart-scan-secondary-button" disabled={busy} onClick={() => void reconstructLatest()}>
+                {busy ? 'Arbejder…' : 'Analyser seneste scan'}
+              </button>
+              <p className="field-help">Analysen kører lokalt på telefonen og bygger først geometri og grove ARCore-klasser. RGB/AI-klassifikation kommer ovenpå senere.</p>
             </div>
           )}
 
           {lastScan && (
             <div className="smart-scan-next">
-              <strong>Seneste scan er klar til 4.2C</strong>
+              <strong>Seneste scan er gemt</strong>
               <span>
                 {lastScan.keyframes} keyframes · {durationLabel(lastScan.durationMs)} · Depth {lastScan.depthEnabled ? 'til' : 'fra'} · Semantik {lastScan.sceneSemanticsEnabled ? 'til' : 'fra'} · GPS {lastScan.locationCaptured ? 'gemt' : 'ikke gemt'}
               </span>
+            </div>
+          )}
+
+          {reconstruction && (
+            <div className="smart-scan-next">
+              <strong>4.2C.1 · Spatial reconstruction</strong>
+              <span>
+                {reconstruction.keyframesProcessed} keyframes · {reconstruction.acceptedSamples.toLocaleString('da-DK')} brugbare depth/semantic samples · {reconstruction.voxels.toLocaleString('da-DK')} voxels · {reconstruction.clusters} clusters
+              </span>
+              <span>{semanticSummary(reconstruction.semanticSamples)}</span>
+              {reconstruction.coordinateFrame === 'legacy-arcore-world' && (
+                <span>Den eksisterende testscan bruger 4.2B's oprindelige ARCore-koordinater. Resultatet er egnet til første fusionstest, men betragtes endnu ikke som landmålingspræcist.</span>
+              )}
             </div>
           )}
 
