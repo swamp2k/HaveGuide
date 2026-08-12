@@ -25,6 +25,18 @@ export interface SmartScanStoredSession {
   reviews: SmartScanFeatureReview[];
 }
 
+export interface SmartScanDriftKnot {
+  position: number;
+  offsetX: number;
+  offsetZ: number;
+}
+
+export interface SmartScanDriftCorrection {
+  axis: 'x' | 'z';
+  knots: SmartScanDriftKnot[];
+  baselineOutsideRatio: number;
+}
+
 export interface SmartScanAlignment {
   anchorLat: number;
   anchorLng: number;
@@ -33,6 +45,7 @@ export interface SmartScanAlignment {
   rotationDegrees: number;
   scale: number;
   status: 'draft' | 'aligned';
+  driftCorrection?: SmartScanDriftCorrection | null;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
