@@ -61,6 +61,35 @@
 .smart-scan-capabilities .missing strong { color: #9b302e; }
 .smart-scan-capabilities .optional strong { color: #765f25; }
 
+.smart-scan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .65rem;
+}
+
+.smart-scan-actions .field-help {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.smart-scan-secondary-button {
+  min-height: 44px;
+  padding: .65rem .9rem;
+  border: 1px solid #8eac94;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 78%);
+  color: var(--green-900);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.smart-scan-secondary-button:disabled {
+  cursor: default;
+  opacity: .62;
+}
+
 .smart-scan-next,
 .smart-scan-web-note {
   display: grid;
@@ -82,4 +111,5 @@
   .smart-scan-heading { gap: .65rem; }
   .smart-scan-icon { width: 44px; height: 44px; border-radius: 14px; font-size: 1.45rem; }
   .smart-scan-capabilities { grid-template-columns: 1fr; }
+  .smart-scan-actions > button { width: 100%; }
 }
