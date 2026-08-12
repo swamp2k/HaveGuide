@@ -89,6 +89,10 @@ export interface GardenScanDraftFeature {
   semanticLabels: string[];
   evidenceKeyframes: string[];
   visionEvidence: string[];
+  layer?: 'surface' | 'vegetation' | 'structure' | 'object' | string;
+  geometryQuality?: 'voxel-hull' | 'bounds-fallback' | string;
+  footprint?: Array<[number, number]>;
+  footprintAreaM2?: number;
 }
 
 export interface GardenScanUnderstandingSummary {
@@ -101,6 +105,8 @@ export interface GardenScanUnderstandingSummary {
   bounds?: { available?: boolean } & Partial<GardenScanSpatialBounds>;
   draftFeatures: GardenScanDraftFeature[];
   draftFile: string;
+  suppressedGenericDuplicates?: number;
+  featuresWithVoxelFootprints?: number;
 }
 
 type NativeGardenScanCapabilities = Omit<GardenScanCapabilities, 'native'>;
