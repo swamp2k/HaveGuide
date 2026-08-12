@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { GardenDetail } from '../../shared/types';
 import {
   applyLatestGardenScanVisionClassifications,
   ensureGardenScanArCore,
@@ -14,12 +15,13 @@ import {
   type GardenScanVisionClassification,
 } from '../native/garden-scan';
 import { smartScanApi, type SmartScanStoredSession } from '../smart-scan-api';
+import { SmartScanAlignmentEditor } from './SmartScanAlignment';
 import { SmartScanPreview } from './SmartScanPreview';
 import { StatusMessage } from './StatusMessage';
 import './SmartScanCard.css';
 
 interface SmartScanCardProps {
-  gardenId: string;
+  garden: GardenDetail;
 }
 
 function capabilityLabel(value: boolean): string {
@@ -40,7 +42,8 @@ function semanticSummary(samples: Record<string, number>): string {
     .join(' · ');
 }
 
-export function SmartScanCard({ gardenId }: SmartScanCardProps) {
+export function SmartScanCard({ garden }: SmartScanCardProps) {
+  const gardenId = garden.id;
   const [capabilities, setCapabilities] = useState<GardenScanCapabilities | null>(null);
   const [lastScan, setLastScan] = useState<GardenScanSummary | null>(null);
   const [reconstruction, setReconstruction] = useState<GardenScanReconstructionSummary | null>(null);
@@ -125,7 +128,7 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
 
   async function understandLatest(forceVision = false) {
     setBusy(true);
-    setMessage('4.2C.4: rekonstruerer geometri og vælger RGB-udsnit…');
+    setMessage('4.2C.5: rekonstruerer geometri og vælger RGB-udsnit…');
     try {
       const spatial = await reconstructLatestGardenScan();
       setReconstruction(spatial);
@@ -134,7 +137,7 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
       let classifications: GardenScanVisionClassification[] = [];
       let visionFailed = false;
       if (batch.candidates.length > 0) {
-        setMessage(`4.2C.4: klassificerer ${batch.candidates.length} målrettede haveudsnit…`);
+        setMessage(`4.2C.5: klassificerer ${batch.candidates.length} målrettede haveudsnit…`);
         try {
           const vision = await smartScanApi.classify(gardenId, batch.sessionId, batch.candidates, forceVision);
           classifications = vision.classifications;
@@ -143,7 +146,7 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
         }
       }
 
-      setMessage('4.2C.4: fusionerer observationer og klargør review…');
+      setMessage('4.2C.5: fusionerer observationer og klargør review/alignment…');
       const result = await applyLatestGardenScanVisionClassifications(batch.sessionId, classifications);
       setUnderstanding(result);
       const saved = await smartScanApi.saveSession(gardenId, {
@@ -157,8 +160,8 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
       const footprintText = result.featuresWithVoxelFootprints == null ? '' : `, ${result.featuresWithVoxelFootprints} med voxel-footprint`;
       const suppressedText = result.suppressedGenericDuplicates ? `, ${result.suppressedGenericDuplicates} generiske dubletter fjernet` : '';
       setMessage(visionFailed
-        ? `4.2C.4 byggede ${result.features} feature-kandidater${footprintText}. RGB-klassifikation var utilgængelig, men review kan stadig gennemføres.`
-        : `4.2C.4 klar: ${result.features} draft features${footprintText}${suppressedText}. Tryk på et område i kortet for at reviewe.`);
+        ? `4.2C.5 byggede ${result.features} feature-kandidater${footprintText}. RGB-klassifikation var utilgængelig, men review og placering kan stadig gennemføres.`
+        : `4.2C.5 klar: ${result.features} draft features${footprintText}${suppressedText}. Review modellen og placér den derefter over haven.`);
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : 'Objektforståelsen kunne ikke gennemføres.');
     } finally {
@@ -172,7 +175,7 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
         <div>
           <p className="eyebrow">Smart Garden Scan · Android</p>
           <h2>Gå rundt. Have Guide bygger haven.</h2>
-          <p>ARCore bygger geometrien. RGB-udsnit hjælper med klassifikation, og voxel-footprints omsætter de rå clusters til former, du kan gennemgå og rette.</p>
+          <p>ARCore bygger geometrien. RGB-udsnit hjælper med klassifikation, voxel-footprints omsætter clusters til former, og den reviewede model kan nu placeres direkte over haven.</p>
         </div>
         <span className="smart-scan-icon" aria-hidden="true">⌾</span>
       </div>
@@ -217,9 +220,9 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
                 {busy ? 'Arbejder…' : 'Spatial rekonstruktion'}
               </button>
               <button type="button" className="smart-scan-secondary-button" disabled={busy} onClick={() => void understandLatest(false)}>
-                {busy ? 'Arbejder…' : 'Forstå og review haven · 4.2C.4'}
+                {busy ? 'Arbejder…' : 'Forstå, review og placér · 4.2C.5'}
               </button>
-              <p className="field-help">Objektforståelsen sender højst 16 små målrettede crops. Resultatet caches pr. scan; en normal gentagelse udløser ikke ny billedanalyse.</p>
+              <p className="field-help">Objektforståelsen sender højst 16 små målrettede crops. Resultatet caches pr. scan; normal gentagelse udløser ikke ny billedanalyse.</p>
             </div>
           )}
 
@@ -240,7 +243,7 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
               </span>
               <span>{semanticSummary(reconstruction.semanticSamples)}</span>
               {reconstruction.coordinateFrame === 'legacy-arcore-world' && (
-                <span>Den eksisterende testscan bruger 4.2B's oprindelige ARCore-koordinater. Resultatet er egnet til fusion og review, men betragtes endnu ikke som landmålingspræcist.</span>
+                <span>Den eksisterende testscan bruger 4.2B's oprindelige ARCore-koordinater. Resultatet er egnet til fusion, review og manuel alignment, men betragtes endnu ikke som landmålingspræcist.</span>
               )}
             </div>
           )}
@@ -253,6 +256,7 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
                 storedSession={storedSession}
                 onStoredSession={setStoredSession}
               />
+              <SmartScanAlignmentEditor garden={garden} session={storedSession} />
               <button type="button" className="smart-scan-tertiary-button" disabled={busy} onClick={() => void understandLatest(true)}>
                 Genanalyser RGB-udsnit
               </button>
@@ -266,7 +270,7 @@ export function SmartScanCard({ gardenId }: SmartScanCardProps) {
       ) : capabilities ? (
         <div className="smart-scan-web-note">
           <strong>Smart Scan ligger i Android-appen</strong>
-          <span>PWA'en beholder luftfoto og manuel redigering som fallback. Scan-review gemmes server-side, så det senere også kan åbnes i en større desktop-editor.</span>
+          <span>PWA'en beholder luftfoto og manuel redigering som fallback. Scan-review og alignment gemmes server-side, så samme model senere kan finjusteres i en større desktop-editor.</span>
         </div>
       ) : null}
 
