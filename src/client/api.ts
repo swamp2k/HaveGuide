@@ -31,6 +31,7 @@ import type {
   updatePlantSchema,
   updateWalkSchema,
 } from '../shared/schemas';
+import type { GardenScanVisionCandidate, GardenScanVisionClassification } from './native/garden-scan';
 import { createPasswordChallenge, derivePasswordProof } from './auth/password';
 import { normalizeRuntimeUrls, runtimeUrl } from './runtime-url';
 
@@ -105,6 +106,11 @@ export const api = {
   decideSuggestion: (gardenId: string, suggestionId: string, action: 'accept' | 'reject') => request<{ ok: true }>(`/api/gardens/${gardenId}/suggestions/${suggestionId}/decision`, { method: 'POST', body: JSON.stringify({ action }) }),
   mergePlants: (gardenId: string, plantId: string, duplicatePlantId: string) => request<{ ok: true }>(`/api/gardens/${gardenId}/plants/${plantId}/merge`, { method: 'POST', body: JSON.stringify({ duplicatePlantId }) }),
   createAssessment: (gardenId: string, input: z.infer<typeof createAssessmentSchema>) => request<{ assessment: GardenAssessment }>(`/api/gardens/${gardenId}/assessments`, { method: 'POST', body: JSON.stringify(input) }),
+  classifySmartScanCandidates: (gardenId: string, sessionId: string, candidates: GardenScanVisionCandidate[]) =>
+    request<{ sessionId: string; classifications: GardenScanVisionClassification[] }>(`/api/gardens/${gardenId}/smart-scan/classify`, {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, candidates }),
+    }),
   getDesignWorkspace: (gardenId: string) => request<{ workspace: DesignWorkspace }>(`/api/gardens/${gardenId}/design`),
   createDesignProject: (gardenId: string, input: z.infer<typeof createDesignProjectSchema>) => request<{ workspace: DesignWorkspace }>(`/api/gardens/${gardenId}/design/projects`, { method: 'POST', body: JSON.stringify(input) }),
   selectDesignOption: (gardenId: string, projectId: string, optionId: string) => request<{ workspace: DesignWorkspace }>(`/api/gardens/${gardenId}/design/projects/${projectId}/select`, { method: 'POST', body: JSON.stringify({ optionId }) }),
