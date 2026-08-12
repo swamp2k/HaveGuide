@@ -6,6 +6,18 @@ import type { AppEnvironment } from '../types';
 import { parseJson } from '../utils/request';
 import { jsonError } from '../utils/response';
 
+const driftKnotSchema = z.object({
+  position: z.number().finite().min(-500).max(500),
+  offsetX: z.number().finite().min(-5).max(5),
+  offsetZ: z.number().finite().min(-5).max(5),
+});
+
+const driftCorrectionSchema = z.object({
+  axis: z.enum(['x', 'z']),
+  knots: z.array(driftKnotSchema).min(3).max(9),
+  baselineOutsideRatio: z.number().finite().min(0).max(1),
+});
+
 const alignmentSchema = z.object({
   anchorLat: z.number().min(-90).max(90),
   anchorLng: z.number().min(-180).max(180),
@@ -14,6 +26,7 @@ const alignmentSchema = z.object({
   rotationDegrees: z.number().finite().min(-3600).max(3600),
   scale: z.number().finite().min(0.5).max(1.5),
   status: z.enum(['draft', 'aligned']).default('draft'),
+  driftCorrection: driftCorrectionSchema.nullable().optional(),
 });
 
 type AlignmentRow = {
