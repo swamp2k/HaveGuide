@@ -7,6 +7,7 @@ import { designRoutes } from './routes/designs';
 import { gardenRoutes } from './routes/gardens';
 import { journeyRoutes } from './routes/journey';
 import { understandingRoutes } from './routes/understanding';
+import { smartScanRoutes } from './routes/smart-scan';
 import { mapRoutes } from './routes/map';
 import { mediaRoutes } from './routes/media';
 import { sameOriginWrites, securityHeaders } from './middleware/security';
@@ -21,6 +22,7 @@ app.get('/api/health', (c) => c.json({ ok: true, service: 'have-guide', environm
 app.route('/api/auth', authRoutes);
 app.route('/api/gardens', gardenRoutes);
 app.route('/api/gardens', understandingRoutes);
+app.route('/api/gardens', smartScanRoutes);
 app.route('/api/gardens', designRoutes);
 app.route('/api/gardens', journeyRoutes);
 app.route('/api/gardens', captureRoutes);
