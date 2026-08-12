@@ -162,47 +162,58 @@
   stroke-width: .6;
 }
 
-.smart-scan-feature rect {
+.smart-scan-feature :is(rect, polygon) {
   fill: #9aa493;
   stroke: rgb(36 48 38 / 60%);
   stroke-width: .45;
+  stroke-linejoin: round;
   fill-opacity: .68;
 }
 
-.smart-scan-feature.review rect {
+.smart-scan-feature.review :is(rect, polygon) {
   stroke-dasharray: 1.5 1.2;
   stroke-width: .7;
 }
 
-.smart-scan-feature-tree rect,
+.smart-scan-layer-surface :is(rect, polygon) {
+  fill-opacity: .42;
+}
+
+.smart-scan-feature-vegetation :is(rect, polygon),
+.smart-scan-feature-structure :is(rect, polygon),
+.smart-scan-feature-object :is(rect, polygon) {
+  fill-opacity: .52;
+}
+
+.smart-scan-feature-tree :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-tree { fill: #4f8b49; background: #4f8b49; }
-.smart-scan-feature-bush rect,
+.smart-scan-feature-bush :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-bush { fill: #71a65e; background: #71a65e; }
-.smart-scan-feature-hedge rect,
+.smart-scan-feature-hedge :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-hedge { fill: #47785a; background: #47785a; }
-.smart-scan-feature-lawn rect,
+.smart-scan-feature-lawn :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-lawn { fill: #a9c86e; background: #a9c86e; }
-.smart-scan-feature-bed rect,
+.smart-scan-feature-bed :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-bed { fill: #c89a67; background: #c89a67; }
-.smart-scan-feature-path rect,
+.smart-scan-feature-path :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-path { fill: #a69a85; background: #a69a85; }
-.smart-scan-feature-patio rect,
+.smart-scan-feature-patio :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-patio { fill: #b4a18b; background: #b4a18b; }
-.smart-scan-feature-building rect,
+.smart-scan-feature-building :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-building { fill: #6f7f8f; background: #6f7f8f; }
-.smart-scan-feature-fence rect,
+.smart-scan-feature-fence :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-fence { fill: #8e735d; background: #8e735d; }
-.smart-scan-feature-play_equipment rect,
+.smart-scan-feature-play_equipment :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-play_equipment { fill: #d3924e; background: #d3924e; }
-.smart-scan-feature-water rect,
+.smart-scan-feature-water :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-water { fill: #6da6b8; background: #6da6b8; }
-.smart-scan-feature-terrain rect,
+.smart-scan-feature-terrain :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-terrain { fill: #b8aa78; background: #b8aa78; }
-.smart-scan-feature-vegetation rect,
+.smart-scan-feature-vegetation :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-vegetation { fill: #7f9d69; background: #7f9d69; }
-.smart-scan-feature-structure rect,
+.smart-scan-feature-structure :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-structure { fill: #877d73; background: #877d73; }
-.smart-scan-feature-object rect,
+.smart-scan-feature-object :is(rect, polygon),
 .smart-scan-legend-swatch.smart-scan-feature-object { fill: #8e8796; background: #8e8796; }
 
 .smart-scan-preview-legend {
