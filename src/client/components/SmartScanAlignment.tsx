@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl, { type GeoJSONSource, type Map as MapLibreMap, type StyleSpecification } from 'maplibre-gl';
 import type { GardenDetail } from '../../shared/types';
+import { runtimeUrl } from '../runtime-url';
 import { smartScanApi, type SmartScanAlignment, type SmartScanStoredSession } from '../smart-scan-api';
 import './SmartScanAlignment.css';
 
@@ -21,7 +22,7 @@ const mapStyle: StyleSpecification = {
     },
     orthophoto: {
       type: 'raster',
-      tiles: ['/api/map/orthophoto/{z}/{x}/{y}.jpg'],
+      tiles: [runtimeUrl('/api/map/orthophoto/{z}/{x}/{y}.jpg')],
       tileSize: 256,
       maxzoom: 21,
       attribution: 'GeoDanmark Ortofoto · Datafordeleren',
@@ -114,6 +115,7 @@ function featureCollection(session: SmartScanStoredSession, alignment: SmartScan
 export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignmentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const placingRef = useRef(false);
   const [alignment, setAlignment] = useState<SmartScanAlignment>(() => defaultAlignment(garden, session));
   const [aerialAvailable, setAerialAvailable] = useState(false);
   const [placing, setPlacing] = useState(false);
@@ -123,11 +125,15 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
   const geojson = useMemo(() => featureCollection(session, alignment), [session, alignment]);
   const visibleFeatures = geojson.features.length;
 
+  useEffect(() => { placingRef.current = placing; }, [placing]);
+
   useEffect(() => {
     let cancelled = false;
     void Promise.all([
       smartScanApi.getAlignment(garden.id, session.sessionId).catch(() => null),
-      fetch('/api/map/config', { credentials: 'same-origin' }).then((response) => response.ok ? response.json() as Promise<{ aerialAvailable: boolean }> : { aerialAvailable: false }).catch(() => ({ aerialAvailable: false })),
+      fetch('/api/map/config', { credentials: 'include' })
+        .then((response) => response.ok ? response.json() as Promise<{ aerialAvailable: boolean }> : { aerialAvailable: false })
+        .catch(() => ({ aerialAvailable: false })),
     ]).then(([saved, mapConfig]) => {
       if (cancelled) return;
       if (saved?.alignment && typeof saved.alignment.anchorLat === 'number' && typeof saved.alignment.anchorLng === 'number') {
@@ -146,6 +152,7 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
       center: [garden.centerLng, garden.centerLat],
       zoom: 20,
       maxZoom: 22,
+      transformRequest: (url) => url.includes('/api/') ? { url: runtimeUrl(url), credentials: 'include' } : { url },
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
@@ -172,12 +179,12 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
         paint: {
           'line-color': ['case', ['==', ['get', 'decision'], 'accepted'], '#173e2b', '#ffffff'],
           'line-width': ['case', ['==', ['get', 'decision'], 'accepted'], 3, 2],
-          'line-dasharray': ['case', ['==', ['get', 'decision'], 'accepted'], ['literal', [1, 0]], ['literal', [2, 1]]],
+          'line-dasharray': [2, 1],
         },
       });
     });
     map.on('click', (event) => {
-      if (!placing) return;
+      if (!placingRef.current) return;
       setAlignment((current) => ({ ...current, anchorLat: event.lngLat.lat, anchorLng: event.lngLat.lng, status: 'draft' }));
       setPlacing(false);
       setMessage('Modelcentrum er flyttet. Finjustér og gem placeringen.');
@@ -187,7 +194,7 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
       map.remove();
       mapRef.current = null;
     };
-  }, [garden.centerLat, garden.centerLng, placing]);
+  }, [garden.centerLat, garden.centerLng]);
 
   useEffect(() => {
     const map = mapRef.current;
