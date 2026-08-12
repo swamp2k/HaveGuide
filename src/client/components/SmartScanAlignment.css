@@ -150,6 +150,20 @@
   accent-color: var(--green-900);
 }
 
+.smart-scan-drift-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .55rem;
+  padding: .7rem;
+  border: 1px solid #c9d8cb;
+  border-radius: 13px;
+  background: #f2f7f1;
+}
+
+.smart-scan-drift-actions .smart-scan-tertiary-button {
+  grid-column: 1 / -1;
+}
+
 .smart-scan-alignment-actions {
   display: flex;
   flex-wrap: wrap;
@@ -166,5 +180,7 @@
   .smart-scan-alignment-map { min-height: 320px; }
   .smart-scan-alignment-controls { grid-template-columns: 1fr; }
   .smart-scan-alignment-nudge { justify-content: center; }
+  .smart-scan-drift-actions { grid-template-columns: 1fr; }
+  .smart-scan-drift-actions .smart-scan-tertiary-button { grid-column: auto; }
   .smart-scan-alignment-actions > button { width: 100%; }
 }
