@@ -19,6 +19,10 @@ import com.google.ar.core.ArCoreApk;
 import com.google.ar.core.Config;
 import com.google.ar.core.Session;
 
+import org.json.JSONObject;
+
+import java.io.File;
+
 @CapacitorPlugin(
     name = "GardenScan",
     permissions = {
@@ -111,6 +115,33 @@ public class GardenScanPlugin extends Plugin {
         requestLocationThenStart(call);
     }
 
+    @PluginMethod
+    public void reconstructLatestScan(PluginCall call) {
+        try {
+            File sessionDir = GardenScanReconstructor.findLatestSession(getContext().getFilesDir());
+            if (sessionDir == null) {
+                call.reject("Der er ingen Smart Garden Scan-session på telefonen endnu.");
+                return;
+            }
+            JSONObject summary = GardenScanReconstructor.reconstruct(sessionDir);
+            JSObject result = new JSObject();
+            result.put("sessionId", summary.getString("sessionId"));
+            result.put("sourceSchemaVersion", summary.getInt("sourceSchemaVersion"));
+            result.put("coordinateFrame", summary.getString("coordinateFrame"));
+            result.put("keyframesProcessed", summary.getLong("keyframesProcessed"));
+            result.put("keyframesSkipped", summary.getLong("keyframesSkipped"));
+            result.put("acceptedSamples", summary.getLong("acceptedSamples"));
+            result.put("voxels", summary.getInt("voxels"));
+            result.put("clusters", summary.getInt("clusters"));
+            result.put("semanticSamples", summary.getJSONObject("semanticSamples"));
+            result.put("reconstructionFile", summary.getString("reconstructionFile"));
+            result.put("voxelFile", summary.getString("voxelFile"));
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Den seneste scan kunne ikke rekonstrueres: " + error.getMessage(), error);
+        }
+    }
+
     @PermissionCallback
     private void startCameraPermissionCallback(PluginCall call) {
         if (getPermissionState("camera") != PermissionState.GRANTED) {
@@ -153,15 +184,31 @@ public class GardenScanPlugin extends Plugin {
             return;
         }
 
+        String sessionPath = data.getStringExtra(GardenScanActivity.EXTRA_SESSION_PATH);
+        long durationMs = data.getLongExtra(GardenScanActivity.EXTRA_DURATION_MS, 0L);
+        long frames = data.getLongExtra(GardenScanActivity.EXTRA_FRAMES, 0L);
+        int keyframes = data.getIntExtra(GardenScanActivity.EXTRA_KEYFRAMES, 0);
+        boolean depthEnabled = data.getBooleanExtra(GardenScanActivity.EXTRA_DEPTH_ENABLED, false);
+        boolean semanticsEnabled = data.getBooleanExtra(GardenScanActivity.EXTRA_SEMANTICS_ENABLED, false);
+        boolean locationCaptured = data.getBooleanExtra(GardenScanActivity.EXTRA_LOCATION_CAPTURED, false);
+
+        // GardenScanActivity and its GL thread can race on the final manifest write. Repair it after the Activity result,
+        // when capture has stopped, so a terminal completed state can no longer be overwritten by "scanning".
+        if (sessionPath != null) {
+            GardenScanReconstructor.markCompleted(
+                new File(sessionPath), durationMs, frames, keyframes, depthEnabled, semanticsEnabled, locationCaptured);
+        }
+
         JSObject result = new JSObject();
         result.put("sessionId", data.getStringExtra(GardenScanActivity.EXTRA_SESSION_ID));
-        result.put("sessionPath", data.getStringExtra(GardenScanActivity.EXTRA_SESSION_PATH));
-        result.put("keyframes", data.getIntExtra(GardenScanActivity.EXTRA_KEYFRAMES, 0));
-        result.put("frames", data.getLongExtra(GardenScanActivity.EXTRA_FRAMES, 0L));
-        result.put("durationMs", data.getLongExtra(GardenScanActivity.EXTRA_DURATION_MS, 0L));
-        result.put("depthEnabled", data.getBooleanExtra(GardenScanActivity.EXTRA_DEPTH_ENABLED, false));
-        result.put("sceneSemanticsEnabled", data.getBooleanExtra(GardenScanActivity.EXTRA_SEMANTICS_ENABLED, false));
-        result.put("locationCaptured", data.getBooleanExtra(GardenScanActivity.EXTRA_LOCATION_CAPTURED, false));
+        result.put("sessionPath", sessionPath);
+        result.put("keyframes", keyframes);
+        result.put("frames", frames);
+        result.put("durationMs", durationMs);
+        result.put("depthEnabled", depthEnabled);
+        result.put("sceneSemanticsEnabled", semanticsEnabled);
+        result.put("locationCaptured", locationCaptured);
+        result.put("completed", true);
         call.resolve(result);
     }
 }
