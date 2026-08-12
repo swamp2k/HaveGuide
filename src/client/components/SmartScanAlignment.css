@@ -43,6 +43,40 @@
   color: var(--green-900);
 }
 
+.smart-scan-boundary-health {
+  display: grid;
+  gap: .2rem;
+  padding: .75rem .8rem;
+  border: 1px solid #d5d3c8;
+  border-radius: 13px;
+  background: #f5f3ec;
+}
+
+.smart-scan-boundary-health strong {
+  color: var(--text);
+  font-size: .9rem;
+}
+
+.smart-scan-boundary-health span {
+  color: var(--text-muted);
+  font-size: .8rem;
+  line-height: 1.4;
+}
+
+.smart-scan-boundary-health.good {
+  border-color: #a9c5ae;
+  background: #edf6ed;
+}
+
+.smart-scan-boundary-health.severe {
+  border-color: #dfa39d;
+  background: #fff0ee;
+}
+
+.smart-scan-boundary-health.severe strong {
+  color: #8f2d27;
+}
+
 .smart-scan-alignment-map {
   position: relative;
   width: 100%;
