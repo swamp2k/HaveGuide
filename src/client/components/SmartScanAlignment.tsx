@@ -10,6 +10,8 @@ interface SmartScanAlignmentProps {
   session: SmartScanStoredSession;
 }
 
+type LngLatPoint = [number, number];
+
 const mapStyle: StyleSpecification = {
   version: 8,
   sources: {
@@ -38,17 +40,24 @@ function effectiveFeatureType(session: SmartScanStoredSession, featureId: string
   return session.reviews.find((review) => review.featureId === featureId)?.typeOverride || fallback;
 }
 
-function localBounds(session: SmartScanStoredSession) {
-  const features = session.draftFeatures.filter((feature) => {
-    const review = session.reviews.find((item) => item.featureId === feature.id);
-    return review?.decision !== 'rejected';
+function activeFeatures(session: SmartScanStoredSession) {
+  const reviews = new Map(session.reviews.map((review) => [review.featureId, review]));
+  return session.draftFeatures.flatMap((feature) => {
+    const review = reviews.get(feature.id);
+    if (review?.decision === 'rejected') return [];
+    const footprint = review?.footprint && review.footprint.length >= 3 ? review.footprint : feature.footprint;
+    return footprint && footprint.length >= 3 ? [{ feature, review, footprint }] : [];
   });
+}
+
+function localBounds(session: SmartScanStoredSession) {
+  const features = activeFeatures(session);
   if (features.length === 0) return { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
   return {
-    minX: Math.min(...features.map((feature) => feature.bounds.min[0])),
-    maxX: Math.max(...features.map((feature) => feature.bounds.max[0])),
-    minZ: Math.min(...features.map((feature) => feature.bounds.min[2])),
-    maxZ: Math.max(...features.map((feature) => feature.bounds.max[2])),
+    minX: Math.min(...features.map(({ feature }) => feature.bounds.min[0])),
+    maxX: Math.max(...features.map(({ feature }) => feature.bounds.max[0])),
+    minZ: Math.min(...features.map(({ feature }) => feature.bounds.min[2])),
+    maxZ: Math.max(...features.map(({ feature }) => feature.bounds.max[2])),
   };
 }
 
@@ -65,7 +74,7 @@ function defaultAlignment(garden: GardenDetail, session: SmartScanStoredSession)
   };
 }
 
-function localToLngLat(point: [number, number], alignment: SmartScanAlignment): [number, number] {
+function localToLngLat(point: [number, number], alignment: SmartScanAlignment): LngLatPoint {
   const radians = (alignment.rotationDegrees * Math.PI) / 180;
   const x = (point[0] - alignment.originX) * alignment.scale;
   const z = (point[1] - alignment.originZ) * alignment.scale;
@@ -87,18 +96,94 @@ function nudge(alignment: SmartScanAlignment, eastMeters: number, northMeters: n
   };
 }
 
-function featureCollection(session: SmartScanStoredSession, alignment: SmartScanAlignment) {
-  const reviews = new Map(session.reviews.map((review) => [review.featureId, review]));
+function boundaryRing(garden: GardenDetail): LngLatPoint[] | null {
+  const boundary = garden.features.find((feature) => feature.type === 'garden_boundary' && feature.geometry.type === 'Polygon');
+  if (!boundary || boundary.geometry.type !== 'Polygon') return null;
+  const ring = boundary.geometry.coordinates[0] ?? [];
+  return ring.length >= 4 ? ring.map((point) => [point[0], point[1]] as LngLatPoint) : null;
+}
+
+function pointInPolygon(point: LngLatPoint, polygon: LngLatPoint[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const a = polygon[i];
+    const b = polygon[j];
+    if (!a || !b) continue;
+    const intersects = ((a[1] > point[1]) !== (b[1] > point[1]))
+      && point[0] < ((b[0] - a[0]) * (point[1] - a[1])) / ((b[1] - a[1]) || Number.EPSILON) + a[0];
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function centroid(points: LngLatPoint[]): LngLatPoint {
+  const count = Math.max(1, points.length);
+  return [
+    points.reduce((sum, point) => sum + point[0], 0) / count,
+    points.reduce((sum, point) => sum + point[1], 0) / count,
+  ];
+}
+
+interface BoundaryDiagnostics {
+  available: boolean;
+  totalVertices: number;
+  outsideVertices: number;
+  outsideRatio: number;
+  violatingFeatures: number;
+  totalFeatures: number;
+  severe: boolean;
+}
+
+function boundaryDiagnostics(session: SmartScanStoredSession, alignment: SmartScanAlignment, boundary: LngLatPoint[] | null): BoundaryDiagnostics {
+  if (!boundary) {
+    return { available: false, totalVertices: 0, outsideVertices: 0, outsideRatio: 0, violatingFeatures: 0, totalFeatures: 0, severe: false };
+  }
+  let totalVertices = 0;
+  let outsideVertices = 0;
+  let violatingFeatures = 0;
+  const features = activeFeatures(session);
+  for (const { footprint } of features) {
+    const transformed = footprint.map((point) => localToLngLat(point, alignment));
+    const outside = transformed.filter((point) => !pointInPolygon(point, boundary)).length;
+    const centerOutside = !pointInPolygon(centroid(transformed), boundary);
+    totalVertices += transformed.length;
+    outsideVertices += outside;
+    if (centerOutside || outside / transformed.length > 0.25) violatingFeatures += 1;
+  }
+  const outsideRatio = totalVertices > 0 ? outsideVertices / totalVertices : 0;
+  return {
+    available: true,
+    totalVertices,
+    outsideVertices,
+    outsideRatio,
+    violatingFeatures,
+    totalFeatures: features.length,
+    severe: outsideRatio > 0.08 || violatingFeatures > Math.max(1, Math.floor(features.length * 0.1)),
+  };
+}
+
+function boundaryCollection(boundary: LngLatPoint[] | null) {
+  if (!boundary) return { type: 'FeatureCollection' as const, features: [] };
   return {
     type: 'FeatureCollection' as const,
-    features: session.draftFeatures.flatMap((feature) => {
-      const review = reviews.get(feature.id);
-      if (review?.decision === 'rejected') return [];
-      const footprint = review?.footprint && review.footprint.length >= 3 ? review.footprint : feature.footprint;
-      if (!footprint || footprint.length < 3) return [];
+    features: [{
+      type: 'Feature' as const,
+      id: 'garden-boundary',
+      geometry: { type: 'Polygon' as const, coordinates: [boundary] },
+      properties: {},
+    }],
+  };
+}
+
+function featureCollection(session: SmartScanStoredSession, alignment: SmartScanAlignment, boundary: LngLatPoint[] | null) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: activeFeatures(session).map(({ feature, review, footprint }) => {
       const coordinates = footprint.map((point) => localToLngLat(point, alignment));
+      const outside = boundary ? coordinates.filter((point) => !pointInPolygon(point, boundary)).length : 0;
+      const violation = boundary ? !pointInPolygon(centroid(coordinates), boundary) || outside / coordinates.length > 0.25 : false;
       coordinates.push(coordinates[0]!);
-      return [{
+      return {
         type: 'Feature' as const,
         id: feature.id,
         geometry: { type: 'Polygon' as const, coordinates: [coordinates] },
@@ -106,10 +191,27 @@ function featureCollection(session: SmartScanStoredSession, alignment: SmartScan
           id: feature.id,
           type: effectiveFeatureType(session, feature.id, feature.type),
           decision: review?.decision ?? 'pending',
+          violation,
         },
-      }];
+      };
     }),
   };
+}
+
+function findBestGlobalFit(session: SmartScanStoredSession, current: SmartScanAlignment, boundary: LngLatPoint[]): { alignment: SmartScanAlignment; diagnostics: BoundaryDiagnostics } {
+  let best = { alignment: current, diagnostics: boundaryDiagnostics(session, current, boundary), score: Number.POSITIVE_INFINITY };
+  for (let north = -5; north <= 5; north += 1) {
+    for (let east = -5; east <= 5; east += 1) {
+      for (let rotation = -20; rotation <= 20; rotation += 5) {
+        const candidate = nudge({ ...current, rotationDegrees: current.rotationDegrees + rotation }, east, north);
+        const diagnostics = boundaryDiagnostics(session, candidate, boundary);
+        const movementPenalty = (Math.abs(east) + Math.abs(north)) * 0.002 + Math.abs(rotation) * 0.0005;
+        const score = diagnostics.outsideRatio + diagnostics.violatingFeatures * 0.04 + movementPenalty;
+        if (score < best.score) best = { alignment: candidate, diagnostics, score };
+      }
+    }
+  }
+  return { alignment: { ...best.alignment, status: 'draft' }, diagnostics: best.diagnostics };
 }
 
 export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignmentProps) {
@@ -122,7 +224,10 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  const geojson = useMemo(() => featureCollection(session, alignment), [session, alignment]);
+  const boundary = useMemo(() => boundaryRing(garden), [garden]);
+  const diagnostics = useMemo(() => boundaryDiagnostics(session, alignment, boundary), [session, alignment, boundary]);
+  const geojson = useMemo(() => featureCollection(session, alignment, boundary), [session, alignment, boundary]);
+  const boundaryGeojson = useMemo(() => boundaryCollection(boundary), [boundary]);
   const visibleFeatures = geojson.features.length;
 
   useEffect(() => { placingRef.current = placing; }, [placing]);
@@ -157,6 +262,19 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     map.on('load', () => {
+      map.addSource('smart-scan-boundary', { type: 'geojson', data: boundaryGeojson });
+      map.addLayer({
+        id: 'smart-scan-boundary-fill',
+        type: 'fill',
+        source: 'smart-scan-boundary',
+        paint: { 'fill-color': '#f5e6a8', 'fill-opacity': 0.1 },
+      });
+      map.addLayer({
+        id: 'smart-scan-boundary-line',
+        type: 'line',
+        source: 'smart-scan-boundary',
+        paint: { 'line-color': '#f4f0d8', 'line-width': 4 },
+      });
       map.addSource('smart-scan-aligned', { type: 'geojson', data: geojson });
       map.addLayer({
         id: 'smart-scan-aligned-fill',
@@ -164,12 +282,13 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
         source: 'smart-scan-aligned',
         paint: {
           'fill-color': [
-            'match', ['get', 'type'],
-            'tree', '#4f8b49', 'bush', '#71a65e', 'hedge', '#47785a', 'lawn', '#a9c86e',
-            'bed', '#c89a67', 'path', '#a69a85', 'patio', '#b4a18b', 'building', '#6f7f8f',
-            'fence', '#8e735d', 'play_equipment', '#d3924e', 'water', '#6da6b8', '#8e8796',
+            'case', ['==', ['get', 'violation'], true], '#d94c42',
+            ['match', ['get', 'type'],
+              'tree', '#4f8b49', 'bush', '#71a65e', 'hedge', '#47785a', 'lawn', '#a9c86e',
+              'bed', '#c89a67', 'path', '#a69a85', 'patio', '#b4a18b', 'building', '#6f7f8f',
+              'fence', '#8e735d', 'play_equipment', '#d3924e', 'water', '#6da6b8', '#8e8796'],
           ],
-          'fill-opacity': 0.42,
+          'fill-opacity': ['case', ['==', ['get', 'violation'], true], 0.6, 0.42],
         },
       });
       map.addLayer({
@@ -177,8 +296,8 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
         type: 'line',
         source: 'smart-scan-aligned',
         paint: {
-          'line-color': ['case', ['==', ['get', 'decision'], 'accepted'], '#173e2b', '#ffffff'],
-          'line-width': ['case', ['==', ['get', 'decision'], 'accepted'], 3, 2],
+          'line-color': ['case', ['==', ['get', 'violation'], true], '#b51f18', ['==', ['get', 'decision'], 'accepted'], '#173e2b', '#ffffff'],
+          'line-width': ['case', ['==', ['get', 'violation'], true], 4, ['==', ['get', 'decision'], 'accepted'], 3, 2],
           'line-dasharray': [2, 1],
         },
       });
@@ -187,7 +306,7 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
       if (!placingRef.current) return;
       setAlignment((current) => ({ ...current, anchorLat: event.lngLat.lat, anchorLng: event.lngLat.lng, status: 'draft' }));
       setPlacing(false);
-      setMessage('Modelcentrum er flyttet. Finjustér og gem placeringen.');
+      setMessage('Modelcentrum er flyttet. Boundary-kontrollen er beregnet igen.');
     });
     mapRef.current = map;
     return () => {
@@ -200,7 +319,8 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
     const map = mapRef.current;
     if (!map?.isStyleLoaded()) return;
     (map.getSource('smart-scan-aligned') as GeoJSONSource | undefined)?.setData(geojson);
-  }, [geojson]);
+    (map.getSource('smart-scan-boundary') as GeoJSONSource | undefined)?.setData(boundaryGeojson);
+  }, [geojson, boundaryGeojson]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -209,13 +329,32 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
     map.setLayoutProperty('scan-align-aerial', 'visibility', aerialAvailable ? 'visible' : 'none');
   }, [aerialAvailable]);
 
+  function optimizeAgainstBoundary() {
+    if (!boundary) {
+      setMessage('Der er ingen tegnet havegrænse at tilpasse scanningen til.');
+      return;
+    }
+    const before = diagnostics;
+    const best = findBestGlobalFit(session, alignment, boundary);
+    setAlignment(best.alignment);
+    const beforePct = Math.round(before.outsideRatio * 100);
+    const afterPct = Math.round(best.diagnostics.outsideRatio * 100);
+    setMessage(best.diagnostics.severe
+      ? `Bedste globale fit reducerer punkter udenfor fra ${beforePct}% til ${afterPct}%, men der er stadig væsentlige boundary-fejl. Det peger på lokal scan-drift eller manglende dækning.`
+      : `Bedste globale fit reducerer punkter udenfor fra ${beforePct}% til ${afterPct}%. Finjustér visuelt og godkend derefter.`);
+  }
+
   async function save(status: 'draft' | 'aligned') {
+    if (status === 'aligned' && diagnostics.available && diagnostics.severe) {
+      setMessage('Placeringen kan ikke godkendes endnu: for meget af scan-modellen krydser den kendte havegrænse. Gem som kladde eller finjustér først.');
+      return;
+    }
     setSaving(true);
-    setMessage(status === 'aligned' ? 'Gemmer den færdige placering…' : 'Gemmer placeringen…');
+    setMessage(status === 'aligned' ? 'Gemmer den boundary-kontrollerede placering…' : 'Gemmer placeringen…');
     try {
       const response = await smartScanApi.saveAlignment(garden.id, session.sessionId, { ...alignment, status });
       setAlignment(response.alignment);
-      setMessage(status === 'aligned' ? 'Scan-modellen er placeret på haven.' : 'Placeringen er gemt som kladde.');
+      setMessage(status === 'aligned' ? 'Scan-modellen er placeret inden for den kendte havegrænse.' : 'Placeringen er gemt som kladde.');
     } catch (caught) {
       setMessage(caught instanceof Error ? caught.message : 'Placeringen kunne ikke gemmes.');
     } finally {
@@ -227,11 +366,23 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
     <section className="smart-scan-alignment">
       <div className="smart-scan-alignment-heading">
         <div>
-          <p className="eyebrow">4.2C.5 · Placér scan på haven</p>
-          <h3>Læg modellen over luftfotoet</h3>
-          <p>{visibleFeatures} ikke-afviste footprints vises samlet. Grøn status betyder kun, at placeringen er godkendt — ikke landmålingspræcision.</p>
+          <p className="eyebrow">4.2C.6 · Boundary-constrained alignment</p>
+          <h3>Hold scanningen inden for haven</h3>
+          <p>{visibleFeatures} ikke-afviste footprints sammenlignes nu med din tegnede havegrænse. Røde områder bryder den kendte grænse.</p>
         </div>
         <span className={`smart-scan-alignment-status ${alignment.status}`}>{alignment.status === 'aligned' ? 'Placeret' : 'Kladde'}</span>
+      </div>
+
+      <div className={`smart-scan-boundary-health${diagnostics.severe ? ' severe' : diagnostics.available ? ' good' : ''}`}>
+        {diagnostics.available ? (
+          <>
+            <strong>{Math.round(diagnostics.outsideRatio * 100)}% af footprint-punkterne ligger udenfor havegrænsen</strong>
+            <span>{diagnostics.violatingFeatures}/{diagnostics.totalFeatures} områder har en tydelig boundary-konflikt.</span>
+            {diagnostics.severe && <span>Bedste globale placering bør prøves først. Hvis konflikten består, behandler vi den som scan-drift/manglende dækning — ikke som en normal placeringsfejl.</span>}
+          </>
+        ) : (
+          <><strong>Ingen havegrænse fundet</strong><span>Tegn først `Havegrænse`, hvis alignment skal kunne boundary-kontrolleres.</span></>
+        )}
       </div>
 
       <div className={`smart-scan-alignment-map${placing ? ' placing' : ''}`} ref={containerRef} />
@@ -261,9 +412,10 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
       </div>
 
       <div className="smart-scan-alignment-actions">
+        <button type="button" className="smart-scan-secondary-button" disabled={saving || !boundary} onClick={optimizeAgainstBoundary}>Find bedste globale placering</button>
         <button type="button" className="smart-scan-secondary-button" disabled={saving} onClick={() => { setPlacing(true); setMessage('Tryk på luftfotoet dér, hvor scan-modellens centrum skal ligge.'); }}>Placér centrum på kortet</button>
         <button type="button" className="smart-scan-secondary-button" disabled={saving} onClick={() => void save('draft')}>Gem kladde</button>
-        <button type="button" className="primary-button" disabled={saving} onClick={() => void save('aligned')}>Godkend placering</button>
+        <button type="button" className="primary-button" disabled={saving || (diagnostics.available && diagnostics.severe)} onClick={() => void save('aligned')}>Godkend placering</button>
       </div>
       {message && <p className="field-help">{message}</p>}
     </section>
