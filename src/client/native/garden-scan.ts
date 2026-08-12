@@ -22,6 +22,21 @@ export interface GardenScanSummary {
   depthEnabled: boolean;
   sceneSemanticsEnabled: boolean;
   locationCaptured: boolean;
+  completed?: boolean;
+}
+
+export interface GardenScanReconstructionSummary {
+  sessionId: string;
+  sourceSchemaVersion: number;
+  coordinateFrame: 'scan-origin' | 'legacy-arcore-world' | string;
+  keyframesProcessed: number;
+  keyframesSkipped: number;
+  acceptedSamples: number;
+  voxels: number;
+  clusters: number;
+  semanticSamples: Record<string, number>;
+  reconstructionFile: string;
+  voxelFile: string;
 }
 
 type NativeGardenScanCapabilities = Omit<GardenScanCapabilities, 'native'>;
@@ -31,6 +46,7 @@ interface GardenScanNativePlugin {
   requestScanPermission(): Promise<NativeGardenScanCapabilities>;
   ensureArCore(): Promise<{ status: string }>;
   startScan(): Promise<GardenScanSummary>;
+  reconstructLatestScan(): Promise<GardenScanReconstructionSummary>;
 }
 
 const NativeGardenScan = registerPlugin<GardenScanNativePlugin>('GardenScan');
@@ -73,4 +89,9 @@ export async function ensureGardenScanArCore(): Promise<{ status: string }> {
 export async function startGardenScan(): Promise<GardenScanSummary> {
   if (!isAndroidNative()) throw new Error('Smart Garden Scan kræver Have Guide Android-appen.');
   return NativeGardenScan.startScan();
+}
+
+export async function reconstructLatestGardenScan(): Promise<GardenScanReconstructionSummary> {
+  if (!isAndroidNative()) throw new Error('Spatial rekonstruktion kræver Have Guide Android-appen.');
+  return NativeGardenScan.reconstructLatestScan();
 }
