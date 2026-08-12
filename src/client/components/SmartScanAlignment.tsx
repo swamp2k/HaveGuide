@@ -192,6 +192,17 @@ function boundaryDiagnostics(session: SmartScanStoredSession, alignment: SmartSc
   };
 }
 
+function isBetterBoundaryFit(
+  candidate: BoundaryDiagnostics,
+  best: BoundaryDiagnostics,
+  candidatePenalty = 0,
+  bestPenalty = 0,
+): boolean {
+  if (candidate.outsideVertices !== best.outsideVertices) return candidate.outsideVertices < best.outsideVertices;
+  if (candidate.violatingFeatures !== best.violatingFeatures) return candidate.violatingFeatures < best.violatingFeatures;
+  return candidatePenalty + 1e-9 < bestPenalty;
+}
+
 function boundaryCollection(boundary: LngLatPoint[] | null) {
   if (!boundary) return { type: 'FeatureCollection' as const, features: [] };
   return {
@@ -245,10 +256,11 @@ function violationPointsCollection(session: SmartScanStoredSession, alignment: S
 
 function findBestGlobalFit(session: SmartScanStoredSession, current: SmartScanAlignment, boundary: LngLatPoint[]) {
   const base: SmartScanAlignment = { ...current, driftCorrection: null, status: 'draft' };
-  let best: { alignment: SmartScanAlignment; diagnostics: BoundaryDiagnostics; score: number } = {
+  const baseline = boundaryDiagnostics(session, base, boundary);
+  let best: { alignment: SmartScanAlignment; diagnostics: BoundaryDiagnostics; penalty: number } = {
     alignment: base,
-    diagnostics: boundaryDiagnostics(session, base, boundary),
-    score: Number.POSITIVE_INFINITY,
+    diagnostics: baseline,
+    penalty: 0,
   };
   for (let north = -5; north <= 5; north += 1) {
     for (let east = -5; east <= 5; east += 1) {
@@ -256,12 +268,13 @@ function findBestGlobalFit(session: SmartScanStoredSession, current: SmartScanAl
         const candidate = nudge({ ...base, rotationDegrees: base.rotationDegrees + rotation }, east, north);
         const diagnostics = boundaryDiagnostics(session, candidate, boundary);
         const movementPenalty = (Math.abs(east) + Math.abs(north)) * 0.002 + Math.abs(rotation) * 0.0005;
-        const score = diagnostics.outsideRatio + diagnostics.violatingFeatures * 0.04 + movementPenalty;
-        if (score < best.score) best = { alignment: candidate, diagnostics, score };
+        if (isBetterBoundaryFit(diagnostics, best.diagnostics, movementPenalty, best.penalty)) {
+          best = { alignment: candidate, diagnostics, penalty: movementPenalty };
+        }
       }
     }
   }
-  return { alignment: best.alignment, diagnostics: best.diagnostics };
+  return { alignment: best.alignment, diagnostics: best.diagnostics, baseline };
 }
 
 function makeInitialDriftCorrection(session: SmartScanStoredSession, baselineOutsideRatio: number): SmartScanDriftCorrection {
@@ -296,7 +309,7 @@ function optimizeLocalDrift(session: SmartScanStoredSession, current: SmartScanA
   let correction = makeInitialDriftCorrection(session, baseline.outsideRatio);
   let bestAlignment: SmartScanAlignment = { ...rawAlignment, driftCorrection: correction };
   let bestDiagnostics = boundaryDiagnostics(session, bestAlignment, boundary);
-  let bestScore = bestDiagnostics.outsideRatio + bestDiagnostics.violatingFeatures * 0.025 + correctionPenalty(correction);
+  let bestPenalty = correctionPenalty(correction);
   const centerIndex = Math.floor(correction.knots.length / 2);
 
   for (let pass = 0; pass < 3; pass += 1) {
@@ -304,7 +317,7 @@ function optimizeLocalDrift(session: SmartScanStoredSession, current: SmartScanA
       if (knotIndex === centerIndex) continue;
       const existing = correction.knots[knotIndex]!;
       let knotBest = existing;
-      let knotBestScore = bestScore;
+      let knotBestPenalty = bestPenalty;
       let knotBestDiagnostics = bestDiagnostics;
       for (let dx = -1.5; dx <= 1.5; dx += 0.5) {
         for (let dz = -1.5; dz <= 1.5; dz += 0.5) {
@@ -319,10 +332,10 @@ function optimizeLocalDrift(session: SmartScanStoredSession, current: SmartScanA
           };
           const candidateAlignment: SmartScanAlignment = { ...rawAlignment, driftCorrection: candidateCorrection };
           const diagnostics = boundaryDiagnostics(session, candidateAlignment, boundary);
-          const score = diagnostics.outsideRatio + diagnostics.violatingFeatures * 0.025 + correctionPenalty(candidateCorrection);
-          if (score + 0.0001 < knotBestScore) {
+          const penalty = correctionPenalty(candidateCorrection);
+          if (isBetterBoundaryFit(diagnostics, knotBestDiagnostics, penalty, knotBestPenalty)) {
             knotBest = candidateKnot;
-            knotBestScore = score;
+            knotBestPenalty = penalty;
             knotBestDiagnostics = diagnostics;
           }
         }
@@ -331,10 +344,14 @@ function optimizeLocalDrift(session: SmartScanStoredSession, current: SmartScanA
         ...correction,
         knots: correction.knots.map((knot, index) => index === knotIndex ? knotBest : knot),
       };
-      bestScore = knotBestScore;
+      bestPenalty = knotBestPenalty;
       bestDiagnostics = knotBestDiagnostics;
       bestAlignment = { ...rawAlignment, driftCorrection: correction };
     }
+  }
+
+  if (bestDiagnostics.outsideVertices >= baseline.outsideVertices) {
+    return { alignment: rawAlignment, diagnostics: baseline, baseline };
   }
 
   return { alignment: bestAlignment, diagnostics: bestDiagnostics, baseline };
@@ -464,9 +481,13 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
     }
     const before = diagnostics;
     const best = findBestGlobalFit(session, alignment, boundary);
-    setAlignment(best.alignment);
     const beforePct = Math.round(before.outsideRatio * 100);
     const afterPct = Math.round(best.diagnostics.outsideRatio * 100);
+    if (best.diagnostics.outsideVertices > before.outsideVertices) {
+      setMessage(`Bedste globale placering blev afvist, fordi den ville forværre boundary-fejlen fra ${beforePct}% til ${afterPct}%. Den nuværende placering er bevaret.`);
+      return;
+    }
+    setAlignment(best.alignment);
     setMessage(best.diagnostics.severe
       ? `Bedste globale fit reducerer punkter udenfor fra ${beforePct}% til ${afterPct}%, men der er stadig væsentlige boundary-fejl. Kør lokal drift-korrektion som næste trin.`
       : `Bedste globale fit reducerer punkter udenfor fra ${beforePct}% til ${afterPct}%. Finjustér visuelt og godkend derefter.`);
@@ -480,7 +501,7 @@ export function SmartScanAlignmentEditor({ garden, session }: SmartScanAlignment
     const result = optimizeLocalDrift(session, alignment, boundary);
     const beforePct = Math.round(result.baseline.outsideRatio * 100);
     const afterPct = Math.round(result.diagnostics.outsideRatio * 100);
-    if (afterPct >= beforePct) {
+    if (result.diagnostics.outsideVertices >= result.baseline.outsideVertices) {
       setMessage(`Lokal drift-korrektion fandt ingen sikker forbedring fra ${beforePct}%. Rågeometrien er bevaret.`);
       return;
     }
