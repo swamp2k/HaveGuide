@@ -183,7 +183,8 @@ public class GardenScanPlugin extends Plugin {
             String classificationsJson = call.getString("classificationsJson");
             if (classificationsJson == null) classificationsJson = "[]";
             JSONArray classifications = new JSONArray(classificationsJson);
-            JSONObject summary = GardenScanUnderstanding.applyVisionClassifications(sessionDir, classifications);
+            GardenScanUnderstanding.applyVisionClassifications(sessionDir, classifications);
+            JSONObject summary = GardenScanFootprintRefiner.refine(sessionDir);
             JSObject result = new JSObject();
             result.put("sessionId", summary.getString("sessionId"));
             result.put("sourceClusters", summary.getInt("sourceClusters"));
@@ -194,6 +195,8 @@ public class GardenScanPlugin extends Plugin {
             result.put("bounds", summary.optJSONObject("bounds"));
             result.put("draftFeatures", summary.getJSONArray("draftFeatures"));
             result.put("draftFile", summary.getString("draftFile"));
+            result.put("suppressedGenericDuplicates", summary.getInt("suppressedGenericDuplicates"));
+            result.put("featuresWithVoxelFootprints", summary.getInt("featuresWithVoxelFootprints"));
             call.resolve(result);
         } catch (Exception error) {
             call.reject("Feature-fusionen kunne ikke gennemføres: " + error.getMessage(), error);
