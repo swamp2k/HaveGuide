@@ -25,6 +25,16 @@ export interface SmartScanStoredSession {
   reviews: SmartScanFeatureReview[];
 }
 
+export interface SmartScanAlignment {
+  anchorLat: number;
+  anchorLng: number;
+  originX: number;
+  originZ: number;
+  rotationDegrees: number;
+  scale: number;
+  status: 'draft' | 'aligned';
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   if (init?.body) headers.set('Content-Type', 'application/json');
@@ -76,5 +86,14 @@ export const smartScanApi = {
   ) => request<{ session: SmartScanStoredSession }>(
     `/api/gardens/${gardenId}/smart-scan/sessions/${encodeURIComponent(sessionId)}/features/${encodeURIComponent(featureId)}`,
     { method: 'PATCH', body: JSON.stringify(input) },
+  ),
+
+  getAlignment: (gardenId: string, sessionId: string) => request<{ alignment: Partial<SmartScanAlignment>; status: 'unplaced' | 'draft' | 'aligned' }>(
+    `/api/gardens/${gardenId}/smart-scan/sessions/${encodeURIComponent(sessionId)}/alignment`,
+  ),
+
+  saveAlignment: (gardenId: string, sessionId: string, alignment: SmartScanAlignment) => request<{ alignment: SmartScanAlignment; status: 'draft' | 'aligned' }>(
+    `/api/gardens/${gardenId}/smart-scan/sessions/${encodeURIComponent(sessionId)}/alignment`,
+    { method: 'PATCH', body: JSON.stringify(alignment) },
   ),
 };
