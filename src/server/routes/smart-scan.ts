@@ -16,7 +16,37 @@ const visionCandidateSchema = z.object({
 
 const classifySmartScanSchema = z.object({
   sessionId: z.string().min(1).max(100),
-  candidates: z.array(visionCandidateSchema).min(1).max(20),
+  candidates: z.array(visionCandidateSchema).min(1).max(16),
+  force: z.boolean().optional().default(false),
+});
+
+const point2Schema = z.tuple([z.number().finite(), z.number().finite()]);
+const point3Schema = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
+const spatialBoundsSchema = z.object({ min: point3Schema, max: point3Schema }).passthrough();
+const draftFeatureSchema = z.object({
+  id: z.string().min(1).max(100),
+  type: z.string().min(1).max(40),
+  confidence: z.number().min(0).max(1),
+  reviewRequired: z.boolean(),
+  samples: z.number().int().nonnegative(),
+  centroid: point3Schema,
+  bounds: spatialBoundsSchema,
+  sourceClusterIds: z.array(z.string().min(1).max(80)).max(100),
+  footprint: z.array(point2Schema).max(1000).optional(),
+  layer: z.string().max(40).optional(),
+}).passthrough();
+
+const saveScanSessionSchema = z.object({
+  sessionId: z.string().min(1).max(100),
+  coordinateFrame: z.string().min(1).max(80),
+  bounds: z.record(z.string(), z.unknown()).optional().default({}),
+  draftFeatures: z.array(draftFeatureSchema).max(100),
+});
+
+const reviewFeatureSchema = z.object({
+  decision: z.enum(['pending', 'accepted', 'rejected']),
+  typeOverride: z.string().min(1).max(40).nullable().optional(),
+  footprint: z.array(point2Schema).max(1000).nullable().optional(),
 });
 
 type VisionType =
@@ -36,6 +66,26 @@ type VisionType =
   | 'vegetation'
   | 'structure'
   | 'unknown';
+
+type SmartScanSessionRow = {
+  id: string;
+  garden_id: string;
+  session_id: string;
+  coordinate_frame: string;
+  bounds_json: string;
+  draft_features_json: string;
+  review_status: 'draft' | 'reviewing' | 'reviewed';
+  created_at: string;
+  updated_at: string;
+};
+
+type SmartScanReviewRow = {
+  feature_id: string;
+  decision: 'pending' | 'accepted' | 'rejected';
+  type_override: string | null;
+  footprint_json: string | null;
+  updated_at: string;
+};
 
 export const smartScanRoutes = new Hono<AppEnvironment>();
 smartScanRoutes.use('*', requireAuth);
@@ -95,7 +145,6 @@ function classifyDescription(description: string, semanticLabel: string, prelimi
     }
   }
 
-  // Small ARCore priors break ties without overruling clear RGB evidence.
   const semantic = semanticLabel.toUpperCase();
   if (semantic === 'TREE') scores.set('vegetation', (scores.get('vegetation') ?? 0) + 1);
   if (semantic === 'BUILDING') scores.set('building', (scores.get('building') ?? 0) + 1);
@@ -114,11 +163,61 @@ function classifyDescription(description: string, semanticLabel: string, prelimi
   return { type: winner[0], confidence };
 }
 
+function parseJsonColumn<T>(value: string, fallback: T): T {
+  try { return JSON.parse(value) as T; } catch { return fallback; }
+}
+
+async function loadScanSession(db: D1Database, gardenId: string, sessionId: string) {
+  const row = await db.prepare(
+    `SELECT id, garden_id, session_id, coordinate_frame, bounds_json, draft_features_json, review_status, created_at, updated_at
+     FROM smart_scan_sessions WHERE garden_id = ? AND session_id = ?`,
+  ).bind(gardenId, sessionId).first<SmartScanSessionRow>();
+  if (!row) return null;
+
+  const reviews = await db.prepare(
+    `SELECT feature_id, decision, type_override, footprint_json, updated_at
+     FROM smart_scan_feature_reviews WHERE garden_id = ? AND session_id = ? ORDER BY feature_id`,
+  ).bind(gardenId, sessionId).all<SmartScanReviewRow>();
+
+  return {
+    id: row.id,
+    gardenId: row.garden_id,
+    sessionId: row.session_id,
+    coordinateFrame: row.coordinate_frame,
+    bounds: parseJsonColumn(row.bounds_json, {}),
+    draftFeatures: parseJsonColumn(row.draft_features_json, []),
+    reviewStatus: row.review_status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    reviews: reviews.results.map((review) => ({
+      featureId: review.feature_id,
+      decision: review.decision,
+      typeOverride: review.type_override,
+      footprint: review.footprint_json ? parseJsonColumn(review.footprint_json, null) : null,
+      updatedAt: review.updated_at,
+    })),
+  };
+}
+
 smartScanRoutes.post('/:gardenId/smart-scan/classify', async (c) => {
+  const gardenId = c.req.param('gardenId');
   if (!(await ownsGarden(c))) return jsonError(c, 404, 'Haven blev ikke fundet.', 'GARDEN_NOT_FOUND');
 
   const parsed = classifySmartScanSchema.safeParse(await parseJson<unknown>(c));
   if (!parsed.success) return jsonError(c, 422, 'Scan-udsnittene er ikke gyldige.', 'INVALID_SMART_SCAN_VISION', parsed.error.flatten());
+
+  if (!parsed.data.force) {
+    const cached = await c.env.DB.prepare(
+      'SELECT classifications_json FROM smart_scan_vision_cache WHERE garden_id = ? AND session_id = ?',
+    ).bind(gardenId, parsed.data.sessionId).first<{ classifications_json: string }>();
+    if (cached) {
+      return c.json({
+        sessionId: parsed.data.sessionId,
+        classifications: parseJsonColumn(cached.classifications_json, []),
+        cached: true,
+      });
+    }
+  }
 
   try {
     const files = parsed.data.candidates.map((candidate) => ({
@@ -145,9 +244,102 @@ smartScanRoutes.post('/:gardenId/smart-scan/classify', async (c) => {
       };
     });
 
-    return c.json({ sessionId: parsed.data.sessionId, classifications });
+    await c.env.DB.prepare(
+      `INSERT INTO smart_scan_vision_cache (garden_id, session_id, classifications_json, created_at, updated_at)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT(garden_id, session_id) DO UPDATE SET
+         classifications_json = excluded.classifications_json,
+         updated_at = CURRENT_TIMESTAMP`,
+    ).bind(gardenId, parsed.data.sessionId, JSON.stringify(classifications)).run();
+
+    return c.json({ sessionId: parsed.data.sessionId, classifications, cached: false });
   } catch (error) {
     console.error(JSON.stringify({ level: 'error', message: 'Smart Scan vision failed', error: error instanceof Error ? error.message : String(error) }));
     return jsonError(c, 503, 'Billedforståelsen kunne ikke gennemføres lige nu.', 'SMART_SCAN_VISION_FAILED');
   }
+});
+
+smartScanRoutes.post('/:gardenId/smart-scan/sessions', async (c) => {
+  const gardenId = c.req.param('gardenId');
+  if (!(await ownsGarden(c))) return jsonError(c, 404, 'Haven blev ikke fundet.', 'GARDEN_NOT_FOUND');
+  const parsed = saveScanSessionSchema.safeParse(await parseJson<unknown>(c));
+  if (!parsed.success) return jsonError(c, 422, 'Scan-resultatet kunne ikke gemmes.', 'INVALID_SMART_SCAN_SESSION', parsed.error.flatten());
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM smart_scan_sessions WHERE garden_id = ? AND session_id = ?',
+  ).bind(gardenId, parsed.data.sessionId).first<{ id: string }>();
+  const id = existing?.id ?? crypto.randomUUID();
+
+  await c.env.DB.prepare(
+    `INSERT INTO smart_scan_sessions
+       (id, garden_id, session_id, coordinate_frame, bounds_json, draft_features_json, review_status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'draft', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+     ON CONFLICT(garden_id, session_id) DO UPDATE SET
+       coordinate_frame = excluded.coordinate_frame,
+       bounds_json = excluded.bounds_json,
+       draft_features_json = excluded.draft_features_json,
+       updated_at = CURRENT_TIMESTAMP`,
+  ).bind(
+    id,
+    gardenId,
+    parsed.data.sessionId,
+    parsed.data.coordinateFrame,
+    JSON.stringify(parsed.data.bounds),
+    JSON.stringify(parsed.data.draftFeatures),
+  ).run();
+
+  return c.json({ session: await loadScanSession(c.env.DB, gardenId, parsed.data.sessionId) }, existing ? 200 : 201);
+});
+
+smartScanRoutes.get('/:gardenId/smart-scan/sessions/:sessionId', async (c) => {
+  const gardenId = c.req.param('gardenId');
+  if (!(await ownsGarden(c))) return jsonError(c, 404, 'Haven blev ikke fundet.', 'GARDEN_NOT_FOUND');
+  const session = await loadScanSession(c.env.DB, gardenId, c.req.param('sessionId'));
+  if (!session) return jsonError(c, 404, 'Smart Scan-sessionen blev ikke fundet.', 'SMART_SCAN_SESSION_NOT_FOUND');
+  return c.json({ session });
+});
+
+smartScanRoutes.patch('/:gardenId/smart-scan/sessions/:sessionId/features/:featureId', async (c) => {
+  const gardenId = c.req.param('gardenId');
+  const sessionId = c.req.param('sessionId');
+  const featureId = c.req.param('featureId');
+  if (!(await ownsGarden(c))) return jsonError(c, 404, 'Haven blev ikke fundet.', 'GARDEN_NOT_FOUND');
+  const parsed = reviewFeatureSchema.safeParse(await parseJson<unknown>(c));
+  if (!parsed.success) return jsonError(c, 422, 'Review-valget er ikke gyldigt.', 'INVALID_SMART_SCAN_REVIEW', parsed.error.flatten());
+
+  const session = await loadScanSession(c.env.DB, gardenId, sessionId);
+  if (!session) return jsonError(c, 404, 'Smart Scan-sessionen blev ikke fundet.', 'SMART_SCAN_SESSION_NOT_FOUND');
+  const draftFeatures = session.draftFeatures as Array<{ id?: string }>;
+  if (!draftFeatures.some((feature) => feature.id === featureId)) {
+    return jsonError(c, 404, 'Feature-kandidaten blev ikke fundet.', 'SMART_SCAN_FEATURE_NOT_FOUND');
+  }
+
+  await c.env.DB.prepare(
+    `INSERT INTO smart_scan_feature_reviews
+       (garden_id, session_id, feature_id, decision, type_override, footprint_json, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(garden_id, session_id, feature_id) DO UPDATE SET
+       decision = excluded.decision,
+       type_override = excluded.type_override,
+       footprint_json = excluded.footprint_json,
+       updated_at = CURRENT_TIMESTAMP`,
+  ).bind(
+    gardenId,
+    sessionId,
+    featureId,
+    parsed.data.decision,
+    parsed.data.typeOverride ?? null,
+    parsed.data.footprint ? JSON.stringify(parsed.data.footprint) : null,
+  ).run();
+
+  const reviewed = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS count FROM smart_scan_feature_reviews
+     WHERE garden_id = ? AND session_id = ? AND decision IN ('accepted', 'rejected')`,
+  ).bind(gardenId, sessionId).first<{ count: number }>();
+  const status = (reviewed?.count ?? 0) >= draftFeatures.length ? 'reviewed' : 'reviewing';
+  await c.env.DB.prepare(
+    'UPDATE smart_scan_sessions SET review_status = ?, updated_at = CURRENT_TIMESTAMP WHERE garden_id = ? AND session_id = ?',
+  ).bind(status, gardenId, sessionId).run();
+
+  return c.json({ session: await loadScanSession(c.env.DB, gardenId, sessionId) });
 });
