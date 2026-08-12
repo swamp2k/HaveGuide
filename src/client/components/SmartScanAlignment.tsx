@@ -244,8 +244,12 @@ function violationPointsCollection(session: SmartScanStoredSession, alignment: S
 }
 
 function findBestGlobalFit(session: SmartScanStoredSession, current: SmartScanAlignment, boundary: LngLatPoint[]) {
-  const base = { ...current, driftCorrection: null, status: 'draft' as const };
-  let best = { alignment: base, diagnostics: boundaryDiagnostics(session, base, boundary), score: Number.POSITIVE_INFINITY };
+  const base: SmartScanAlignment = { ...current, driftCorrection: null, status: 'draft' };
+  let best: { alignment: SmartScanAlignment; diagnostics: BoundaryDiagnostics; score: number } = {
+    alignment: base,
+    diagnostics: boundaryDiagnostics(session, base, boundary),
+    score: Number.POSITIVE_INFINITY,
+  };
   for (let north = -5; north <= 5; north += 1) {
     for (let east = -5; east <= 5; east += 1) {
       for (let rotation = -20; rotation <= 20; rotation += 5) {
@@ -287,7 +291,7 @@ function correctionPenalty(correction: SmartScanDriftCorrection): number {
 }
 
 function optimizeLocalDrift(session: SmartScanStoredSession, current: SmartScanAlignment, boundary: LngLatPoint[]) {
-  const rawAlignment = { ...current, driftCorrection: null, status: 'draft' as const };
+  const rawAlignment: SmartScanAlignment = { ...current, driftCorrection: null, status: 'draft' };
   const baseline = boundaryDiagnostics(session, rawAlignment, boundary);
   let correction = makeInitialDriftCorrection(session, baseline.outsideRatio);
   let bestAlignment: SmartScanAlignment = { ...rawAlignment, driftCorrection: correction };
