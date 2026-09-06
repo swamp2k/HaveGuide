@@ -4,7 +4,6 @@ import type { GardenDetail } from '../../shared/types';
 import { ApiError } from '../api';
 import { captureApi } from '../capture-api';
 import { GuidedCapture } from './GuidedCapture';
-import { MappingAerialOverview } from './MappingAerialOverview';
 import { SpatialTour } from './SpatialTour';
 import { StatusMessage } from './StatusMessage';
 import './MappingAssistant.css';
@@ -39,7 +38,7 @@ export function MappingAssistant({ garden }: MappingAssistantProps) {
     setMessage('');
     try {
       const response = await captureApi.startSession(garden.id, {
-        title: 'Guidet opmåling af haven',
+        title: 'Billeder til din rundtur af haven',
         mode: 'perimeter',
         targetOverlapPercent: 35,
         ...(targetFeatureId ? { targetFeatureId } : {}),
@@ -53,6 +52,7 @@ export function MappingAssistant({ garden }: MappingAssistantProps) {
     }
   }
 
+  if (!workspace && message) return <section className="page"><StatusMessage kind="error">{message}</StatusMessage><button className="primary-button" onClick={() => void load()}>Prøv igen</button></section>;
   if (!workspace) {
     return <section className="mapping-assistant-loading"><div className="spinner" /><span>Forbereder assisteret kortlægning…</span></section>;
   }
@@ -65,8 +65,8 @@ export function MappingAssistant({ garden }: MappingAssistantProps) {
       <section className="mapping-assistant-card capture-entry-card">
         <div className="mapping-card-heading">
           <div>
-            <p className="eyebrow">Guidet opmåling</p>
-            <h2>Gå haven rundt station for station</h2>
+            <p className="eyebrow">Billeder til din rundtur</p>
+            <h2>Tag en rundtur i haven</h2>
             <p>Appen guider dig gennem seks overlappende billeder på hvert sted og beder dig derefter gå videre langs kanten.</p>
           </div>
           <span className="capture-icon" aria-hidden="true">◎</span>
@@ -87,12 +87,11 @@ export function MappingAssistant({ garden }: MappingAssistantProps) {
         </div>
         {workspace.activeSession && <p className="active-survey-status">Aktiv opmåling: station {activeStations} · {activeFrames} billeder gemt</p>}
         <button type="button" className="primary-button" disabled={busy} onClick={() => void (workspace.activeSession ? setCameraOpen(true) : startCapture())}>
-          {workspace.activeSession ? `Fortsæt opmåling · ${activeFrames} billeder` : 'Start guidet opmåling'}
+          {workspace.activeSession ? `Fortsæt opmåling · ${activeFrames} billeder` : 'Start en billedtur'}
         </button>
       </section>
 
       <SpatialTour garden={garden} workspace={workspace} onWorkspace={setWorkspace} />
-      <MappingAerialOverview garden={garden} aerialAvailable={workspace.aerialAvailable} />
 
       {cameraOpen && workspace.activeSession && (
         <GuidedCapture

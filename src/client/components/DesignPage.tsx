@@ -1,3 +1,4 @@
+import '../design.css';
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react';
 import {
   DESIGN_BUDGET_LABELS,

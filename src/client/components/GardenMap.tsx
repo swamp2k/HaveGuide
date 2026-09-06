@@ -13,6 +13,7 @@ import {
 import { closePolygon, type GardenGeometry, type Position } from '../../shared/geojson';
 import type { Confidence, FeatureType, GardenDetail, GardenFeature } from '../../shared/types';
 import { api, ApiError } from '../api';
+import { runtimeUrl } from '../runtime-url';
 import { StatusMessage } from './StatusMessage';
 
 const mapStyle: StyleSpecification = {
@@ -91,6 +92,19 @@ export function GardenMap({ garden, onGardenChanged }: GardenMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const editMarkersRef = useRef<Marker[]>([]);
+  const [aerial, setAerial] = useState<boolean | null>(null);
+  const [baseLayer, setBaseLayer] = useState<'map' | 'aerial'>('aerial');
+  const layerRef = useRef(baseLayer);
+  useEffect(() => { layerRef.current = baseLayer; }, [baseLayer]);
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(runtimeUrl('/api/map/config'), { credentials: 'include' }).then(async (r) => {
+      if (!r.ok) throw new Error('Kortkonfiguration kunne ikke hentes.');
+      const value = await r.json() as { aerialAvailable: boolean };
+      if (!cancelled) setAerial(value.aerialAvailable);
+    }).catch(() => { if (!cancelled) setAerial(false); });
+    return () => { cancelled = true; };
+  }, []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawing, setDrawing] = useState<DrawingState | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -116,10 +130,11 @@ export function GardenMap({ garden, onGardenChanged }: GardenMapProps) {
   );
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (aerial === null || !containerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: mapStyle,
+      style: aerial ? { ...mapStyle, sources: { ...mapStyle.sources, orthophoto: { type: 'raster', tiles: [runtimeUrl('/api/map/orthophoto/{z}/{x}/{y}.jpg')], tileSize: 256, maxzoom: 21, attribution: 'GeoDanmark Ortofoto · Datafordeleren' } }, layers: [...mapStyle.layers, { id: 'orthophoto', type: 'raster', source: 'orthophoto' }] } : mapStyle,
+      transformRequest: (url) => url.includes('/api/') ? { url: runtimeUrl(url), credentials: 'include' } : { url },
       center: [garden.centerLng, garden.centerLat],
       zoom: 18,
       maxZoom: 22,
@@ -129,6 +144,10 @@ export function GardenMap({ garden, onGardenChanged }: GardenMapProps) {
     mapRef.current = map;
 
     map.on('load', () => {
+      if (aerial) {
+        map.setLayoutProperty('orthophoto', 'visibility', layerRef.current === 'aerial' ? 'visible' : 'none');
+        map.setLayoutProperty('osm', 'visibility', layerRef.current === 'map' ? 'visible' : 'none');
+      }
       map.addSource('garden-features', { type: 'geojson', data: featureCollection(garden.features) });
       map.addLayer({
         id: 'garden-fill',
@@ -181,7 +200,7 @@ export function GardenMap({ garden, onGardenChanged }: GardenMapProps) {
       map.remove();
       mapRef.current = null;
     };
-  }, [garden.centerLat, garden.centerLng]);
+  }, [garden.centerLat, garden.centerLng, aerial]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -216,7 +235,7 @@ export function GardenMap({ garden, onGardenChanged }: GardenMapProps) {
     return () => {
       map.off('click', onClick);
     };
-  }, [drawing, editingGeometry]);
+  }, [drawing, editingGeometry, aerial, garden.centerLat, garden.centerLng]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -367,9 +386,20 @@ export function GardenMap({ garden, onGardenChanged }: GardenMapProps) {
     }
   }
 
+  function toggleBaseLayer() {
+    const next = baseLayer === 'aerial' ? 'map' : 'aerial';
+    setBaseLayer(next);
+    const map = mapRef.current;
+    if (map?.getLayer('orthophoto')) {
+      map.setLayoutProperty('orthophoto', 'visibility', next === 'aerial' ? 'visible' : 'none');
+      map.setLayoutProperty('osm', 'visibility', next === 'map' ? 'visible' : 'none');
+    }
+  }
+
   return (
     <section className="map-page" aria-label="Kort over haven">
       <div ref={containerRef} className="map-container" />
+      {aerial && <button className="map-baselayer" onClick={toggleBaseLayer}>{baseLayer === 'aerial' ? 'Vis kort' : 'Vis luftfoto'}</button>}
       {!drawing && !selected && !pendingGeometry && (
         <button className="map-primary-action" type="button" onClick={() => setShowAdd(true)}>
           + Tilføj på kortet

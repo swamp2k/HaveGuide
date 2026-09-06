@@ -94,6 +94,7 @@ export function App() {
     <>
       {!online && <div className="offline-banner" role="status">Du er offline. Kortdata og ændringer kræver forbindelse i denne udgave.</div>}
       <AppShell
+        key={garden.id}
         user={bootstrap.user}
         gardens={gardens}
         garden={garden}

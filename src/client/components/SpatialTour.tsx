@@ -660,7 +660,7 @@ function SpatialTourViewer({
               onClick={() => setIndex(itemIndex)}
               aria-label={`Åbn station ${itemLabel.stationNo}, billede ${itemLabel.shotNo}`}
             >
-              <img src={item.contentUrl} alt="" />
+              <img src={item.contentUrl} alt="" loading="lazy" decoding="async" />
               <span>{itemLabel.stationNo}.{itemLabel.shotNo}</span>
               {item.hotspots.length > 0 && <em>{item.hotspots.length}</em>}
             </button>
@@ -733,7 +733,7 @@ export function SpatialTour({ garden, workspace, onWorkspace }: SpatialTourProps
             const label = frameLabel(previewFrame);
             return (
               <button key={previewFrame.id} type="button" className={`tour-frame quality-${previewFrame.qualityStatus}`} onClick={() => setViewerIndex(frameIndex)}>
-                <img src={previewFrame.contentUrl} alt={`Station ${label.stationNo}, billede ${label.shotNo}`} />
+                <img loading="lazy" decoding="async" src={previewFrame.contentUrl} alt={`Station ${label.stationNo}, billede ${label.shotNo}`} />
                 <div><strong>{label.stationNo}.{label.shotNo}</strong><span>{previewFrame.hotspots.length} objekter</span></div>
               </button>
             );

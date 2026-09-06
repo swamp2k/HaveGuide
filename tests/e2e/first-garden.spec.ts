@@ -54,8 +54,8 @@ test('first user can create, map, understand and plan a garden', async ({ page }
 
   expect(persistedName).toBe('Æbletræ');
 
-  await page.getByRole('button', { name: 'Kortlæg' }).click();
-  await expect(page.getByRole('heading', { name: 'Få billederne til at hænge sammen' })).toBeVisible();
+  await page.getByRole('button', { name: 'Mere', exact: true }).click();
+  await page.getByRole('button', { name: /Observationer og detaljer/ }).click();
   await expect(page.getByRole('heading', { name: 'Forstå din have' })).toBeVisible();
 
   const captureWorkspace = await page.evaluate(async () => {
@@ -193,8 +193,8 @@ test('first user can create, map, understand and plan a garden', async ({ page }
 
   await page.reload();
   await expect(page.locator('.garden-name')).toHaveText('Vores have');
-  await page.getByRole('button', { name: 'Kortlæg' }).click();
-  await expect(page.getByRole('heading', { name: 'Få billederne til at hænge sammen' })).toBeVisible();
+  await page.getByRole('button', { name: 'Mere', exact: true }).click();
+  await page.getByRole('button', { name: /Observationer og detaljer/ }).click();
   await expect(page.getByRole('heading', { name: '1 registrerede planter' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Næste stop' })).toBeVisible();
 
@@ -237,7 +237,8 @@ test('first user can create, map, understand and plan a garden', async ({ page }
     captureStatus: 'completed',
   });
 
-  await page.getByRole('button', { name: 'Planer' }).click();
+  await page.getByRole('button', { name: 'Mere', exact: true }).click();
+  await page.getByRole('button', { name: /Idéer og planer/ }).click();
   await expect(page.getByRole('heading', { name: 'Planlæg din have' })).toBeVisible();
   await expect(page.locator('.design-option')).toHaveCount(3);
   await expect(page.getByText('Valgt', { exact: true })).toBeVisible();

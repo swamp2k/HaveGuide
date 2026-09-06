@@ -44,3 +44,18 @@ body.guided-camera-open .bottom-nav {
   .header-settings-button { width: 40px; height: 40px; }
   .garden-name { max-width: 9rem; }
 }
+
+.bottom-nav { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.garden-welcome { padding: 1.2rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.garden-welcome h1 { font-size: 1.4rem; margin: .2rem 0; }
+.garden-shortcuts { display: flex; flex-wrap: wrap; gap: .6rem; padding: 1rem; }
+.garden-shortcuts button { flex: 1 1 130px; border: 1px solid var(--border); background: var(--surface, white); color: var(--green-900); border-radius: 12px; padding: .8rem; min-height: 48px; }
+.garden-tool-grid { display: grid; gap: .8rem; max-width: 700px; }
+.garden-tool-grid > button { display: grid; gap: .4rem; text-align: left; background: var(--surface, white); border: 1px solid var(--border); border-radius: 16px; padding: 1.2rem; color: var(--text); }
+.garden-tool-grid > button strong { font-size: 1.1rem; }
+.garden-tool-grid > button span { color: var(--text-muted); }
+.section-back { margin: .8rem 1rem; min-height: 44px; }
+.app-shell button:focus-visible { outline: 3px solid #c17b17; outline-offset: 3px; }
+.map-baselayer { position: absolute; top: 1rem; left: 1rem; z-index: 2; background: white; color: #173e2b; border: 1px solid #b8caba; border-radius: 12px; padding: .7rem; min-height: 44px; box-shadow: 0 2px 8px #0002; }
+.app-shell .map-page { height: 56dvh; min-height: 320px; max-height: 620px; }
+.app-shell .garden-shortcuts { padding-bottom: 6rem; }

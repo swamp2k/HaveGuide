@@ -9,6 +9,7 @@ import { FEATURE_TYPE_LABELS, FEATURE_TYPES } from '../../shared/constants';
 import { closePolygon, type GardenGeometry, type Position } from '../../shared/geojson';
 import type { FeatureType, GardenDetail, GardenFeature } from '../../shared/types';
 import { api, ApiError } from '../api';
+import { runtimeUrl } from '../runtime-url';
 import { StatusMessage } from './StatusMessage';
 import './AerialEditor.css';
 
@@ -47,7 +48,7 @@ const mapStyle: StyleSpecification = {
     },
     orthophoto: {
       type: 'raster',
-      tiles: ['/api/map/orthophoto/{z}/{x}/{y}.jpg'],
+      tiles: [runtimeUrl('/api/map/orthophoto/{z}/{x}/{y}.jpg')],
       tileSize: 256,
       maxzoom: 21,
       attribution: 'GeoDanmark Ortofoto · Datafordeleren',
@@ -190,7 +191,7 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch('/api/map/config', { credentials: 'same-origin' })
+    void fetch(runtimeUrl('/api/map/config'), { credentials: 'include' })
       .then(async (response) => {
         if (!response.ok) throw new Error('Kortkonfiguration kunne ikke hentes.');
         return response.json() as Promise<{ aerialAvailable: boolean }>;
@@ -209,6 +210,7 @@ export function AerialEditor({ garden, onGardenChanged }: AerialEditorProps) {
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: mapStyle,
+      transformRequest: (url) => url.includes('/api/') ? { url: runtimeUrl(url), credentials: 'include' } : { url },
       center: [garden.centerLng, garden.centerLat],
       zoom: 19,
       maxZoom: 22,

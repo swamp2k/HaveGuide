@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', '.wrangler', 'worker-configuration.d.ts', 'playwright-report', 'test-results'] },
+  { ignores: ['dist', '.wrangler', 'worker-configuration.d.ts', 'playwright-report', 'test-results', 'android/app/src/main/assets/public/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

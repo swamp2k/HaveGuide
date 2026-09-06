@@ -64,13 +64,14 @@ export function SmartScanPublishCard({ garden, onGardenChanged }: Props) {
 
   return (
     <section className="mapping-assistant-card smart-scan-publish-card">
-      <p className="eyebrow">4.2C.8 · Gem den forståede have</p>
+      <p className="eyebrow">Gem på dit havekort</p>
       <h2>Fra scan til Min have</h2>
-      <p className="field-help">Kun godkendte områder publiceres. Pending og afviste områder bliver i scan-kladden, og boundary-konflikter springes over.</p>
+      <p className="field-help">Kun de områder, du har godkendt og placeret inden for havens grænse, bliver føjet til kortet.</p>
       {status?.available && <div className="smart-scan-next"><strong>{accepted} godkendte områder klar</strong><span>{status.total ?? 0} kandidater · placering {status.alignmentStatus === 'aligned' ? 'godkendt' : 'ikke godkendt'}</span></div>}
       <button type="button" className="primary-button" disabled={busy || !ready} onClick={() => void publish()}>{busy ? 'Gemmer…' : 'Gem godkendte områder i Min have'}</button>
       {status?.available && status.alignmentStatus !== 'aligned' && <p className="field-help">Godkend først scan-placeringen ovenfor.</p>}
       {status?.available && accepted === 0 && <p className="field-help">Godkend mindst ét område i review-kortet først.</p>}
+      <button className="text-button" disabled={busy} onClick={() => void refresh().catch(() => setMessage('Status kunne ikke hentes. Prøv igen.'))}>Opdatér efter gennemgang</button>
       {message && <StatusMessage>{message}</StatusMessage>}
     </section>
   );
