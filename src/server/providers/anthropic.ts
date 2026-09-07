@@ -19,8 +19,10 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 function extractJson(text: string): unknown {
-  const trimmed = text.trim().replace(/^\`\`\`(?:json)?\s*/i, '').replace(/\s*\`\`\`$/, '');
-  try { return JSON.parse(trimmed); } catch {
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  try {
+    return JSON.parse(trimmed);
+  } catch {
     const first = trimmed.indexOf('{');
     const last = trimmed.lastIndexOf('}');
     if (first >= 0 && last > first) return JSON.parse(trimmed.slice(first, last + 1));
@@ -70,7 +72,11 @@ export class AnthropicGardenProvider {
       .slice(0, 5)
       .map((item) => item.suggestions[0])
       .filter(Boolean)
-      .map((item) => ({ commonName: item.commonName, scientificName: item.scientificName, confidence: item.score }));
+      .map((item) => ({
+        commonName: item.commonName,
+        scientificName: item.scientificName,
+        confidence: item.score,
+      }));
 
     const prompt = `Du er HaveGuide, en dansk haveassistent. Du analyserer ét konkret foto af et haveområde.
 
@@ -133,12 +139,14 @@ Returnér KUN valid JSON i præcis denne struktur:
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      throw new Error(`Anthropic svarede med status ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ''}`);
+      throw new Error(
+        `Anthropic svarede med status ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ''}`,
+      );
     }
 
     const body = await response.json() as { content?: Array<{ type?: string; text?: string }> };
-    const text = body.content?.find((item) => item.type === 'text')?.text;
-    if (!text) throw new Error('Anthropic returnerede ikke et tekstsvar.');
-    return responseSchema.parse(extractJson(text));
+    const answer = body.content?.find((item) => item.type === 'text')?.text;
+    if (!answer) throw new Error('Anthropic returnerede ikke et tekstsvar.');
+    return responseSchema.parse(extractJson(answer));
   }
 }
