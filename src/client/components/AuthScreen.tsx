@@ -1,73 +1,54 @@
 import { useState } from 'react';
-import { api, ApiError } from '../api';
-import { StatusMessage } from './StatusMessage';
+import type { FormEvent } from 'react';
+import { api } from '../api';
+import { derivePasswordProof, newPasswordChallenge } from '../auth/password';
 
-interface AuthScreenProps {
-  mode: 'setup' | 'login';
-  onAuthenticated: () => void;
-}
-
-export function AuthScreen({ mode, onAuthenticated }: AuthScreenProps) {
+export function AuthScreen({ setupRequired, onAuthenticated }: { setupRequired: boolean; onAuthenticated: () => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
-  async function submit(event: React.FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError('');
     try {
-      if (mode === 'setup') await api.setup({ username, password });
-      else await api.login({ username, password });
+      if (setupRequired) {
+        const challenge = newPasswordChallenge();
+        const proof = await derivePasswordProof(password, challenge);
+        await api.setup({ username, proof, ...challenge });
+      } else {
+        const { challenge } = await api.challenge(username);
+        const proof = await derivePasswordProof(password, challenge);
+        await api.login({ username, proof });
+      }
       onAuthenticated();
-    } catch (caught) {
-      setError(caught instanceof ApiError ? caught.message : 'Login mislykkedes.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login fejlede.');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <main className="auth-layout">
-      <section className="auth-card" aria-labelledby="auth-title">
-        <div className="brand-mark" aria-hidden="true">🌱</div>
-        <h1 id="auth-title">Have Guide</h1>
-        <p className="lead">
-          {mode === 'setup'
-            ? 'Opret den første bruger. Herefter lukkes offentlig registrering.'
-            : 'Log ind for at fortsætte med din have.'}
-        </p>
-        {error && <StatusMessage kind="error">{error}</StatusMessage>}
-        <form onSubmit={submit} className="form-stack">
+    <main className="auth-page">
+      <section className="auth-card">
+        <div className="brand-mark">HG</div>
+        <p className="eyebrow">HaveGuide</p>
+        <h1>{setupRequired ? 'Opret første bruger' : 'Velkommen tilbage'}</h1>
+        <p className="muted">Foto først. Havehjælp bagefter.</p>
+        <form onSubmit={submit} className="stack">
           <label>
-            Brugernavn
-            <input
-              autoComplete="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              minLength={3}
-              maxLength={64}
-              required
-              autoFocus
-            />
+            <span>Brugernavn</span>
+            <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required />
           </label>
           <label>
-            Adgangskode
-            <input
-              type="password"
-              autoComplete={mode === 'setup' ? 'new-password' : 'current-password'}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              minLength={10}
-              maxLength={256}
-              required
-            />
+            <span>Adgangskode</span>
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={setupRequired ? 'new-password' : 'current-password'} minLength={8} required />
           </label>
-          {mode === 'setup' && <p className="field-help">Brug mindst 10 tegn.</p>}
-          <button className="primary-button" type="submit" disabled={busy}>
-            {busy ? 'Arbejder…' : mode === 'setup' ? 'Opret bruger' : 'Log ind'}
-          </button>
+          {error && <p className="error-box">{error}</p>}
+          <button className="primary" disabled={busy}>{busy ? 'Arbejder…' : setupRequired ? 'Opret og fortsæt' : 'Log ind'}</button>
         </form>
       </section>
     </main>

@@ -1,46 +1,38 @@
 import { Hono } from 'hono';
-import { logger } from 'hono/logger';
+import { secureHeaders } from 'hono/secure-headers';
 import type { AppEnvironment } from './types';
 import { authRoutes } from './routes/auth';
-import { captureRoutes } from './routes/capture';
-import { designRoutes } from './routes/designs';
-import { gardenRoutes } from './routes/gardens';
-import { journeyRoutes } from './routes/journey';
-import { understandingRoutes } from './routes/understanding';
-import { smartScanRoutes } from './routes/smart-scan';
-import { smartScanAlignmentRoutes } from './routes/smart-scan-alignment';
-import { mapRoutes } from './routes/map';
-import { mediaRoutes } from './routes/media';
-import { sameOriginWrites, securityHeaders } from './middleware/security';
-import { jsonError } from './utils/response';
+import { imageRoutes } from './routes/images';
+import { sceneRoutes } from './routes/scenes';
 
 const app = new Hono<AppEnvironment>();
-app.use('*', logger());
-app.use('*', securityHeaders);
-app.use('/api/*', sameOriginWrites);
 
-app.get('/api/health', (c) => c.json({ ok: true, service: 'have-guide', environment: c.env.APP_ENV }));
+app.use('*', secureHeaders({
+  contentSecurityPolicy: {
+    defaultSrc: ["'self'"],
+    imgSrc: ["'self'", 'blob:', 'data:'],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    scriptSrc: ["'self'"],
+    connectSrc: ["'self'"],
+  },
+  referrerPolicy: 'same-origin',
+}));
+
+app.get('/api/health', (c) => c.json({ ok: true, app: 'have-guide', version: '0.2.0' }));
+app.get('/api/capabilities', (c) => c.json({
+  plantIdentification: Boolean(c.env.PLANTNET_API_KEY),
+  aiAnalysis: Boolean(c.env.ANTHROPIC_API_KEY),
+  imageEditing: false,
+  imageEditingReason: 'Anthropic kan analysere billeder, men returnerer ikke redigerede billeder. Tilføj en billedmodel senere.',
+}));
 app.route('/api/auth', authRoutes);
-app.route('/api/gardens', gardenRoutes);
-app.route('/api/gardens', understandingRoutes);
-app.route('/api/gardens', smartScanRoutes);
-app.route('/api/gardens', smartScanAlignmentRoutes);
-app.route('/api/gardens', designRoutes);
-app.route('/api/gardens', journeyRoutes);
-app.route('/api/gardens', captureRoutes);
-app.route('/api/map', mapRoutes);
-app.route('/api/media', mediaRoutes);
+app.route('/api/scenes', sceneRoutes);
+app.route('/api/images', imageRoutes);
 
-app.notFound((c) => {
-  if (new URL(c.req.url).pathname.startsWith('/api/')) {
-    return jsonError(c, 404, 'API-ruten findes ikke.', 'NOT_FOUND');
-  }
-  return c.env.ASSETS.fetch(c.req.raw);
-});
-
+app.notFound((c) => c.json({ error: { message: 'Ikke fundet.', code: 'NOT_FOUND' } }, 404));
 app.onError((error, c) => {
-  console.error(JSON.stringify({ level: 'error', message: error.message, stack: error.stack }));
-  return jsonError(c, 500, 'Der opstod en uventet fejl.', 'INTERNAL_ERROR');
+  console.error(error);
+  return c.json({ error: { message: 'Der skete en serverfejl.', code: 'INTERNAL_ERROR' } }, 500);
 });
 
 export default app;

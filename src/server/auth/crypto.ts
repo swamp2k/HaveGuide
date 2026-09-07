@@ -69,11 +69,7 @@ export function readPasswordChallenge(encoded: string): PasswordChallenge | null
   return { algorithm: PASSWORD_KDF, iterations: parsed.iterations, salt: parsed.salt };
 }
 
-export async function createPasswordVerifier(
-  proof: string,
-  salt: string,
-  iterations: number,
-): Promise<string> {
+export async function createPasswordVerifier(proof: string, salt: string, iterations: number): Promise<string> {
   const proofBytes = base64ToBytes(proof);
   const saltBytes = base64ToBytes(salt);
   if (proofBytes?.byteLength !== PASSWORD_PROOF_BYTES) throw new Error('Invalid password proof.');
@@ -96,10 +92,7 @@ export async function verifyPasswordProof(
   if (parsed.algorithm === VERIFIER_ALGORITHM) {
     const actual = base64ToBytes(await proofDigest(proof));
     const expected = base64ToBytes(parsed.verifier);
-    return {
-      valid: Boolean(actual && expected && constantTimeEqual(actual, expected)),
-      upgradedVerifier: null,
-    };
+    return { valid: Boolean(actual && expected && constantTimeEqual(actual, expected)), upgradedVerifier: null };
   }
 
   if (parsed.algorithm === LEGACY_ALGORITHM) {
@@ -107,9 +100,7 @@ export async function verifyPasswordProof(
     const valid = Boolean(expected && constantTimeEqual(proofBytes, expected));
     return {
       valid,
-      upgradedVerifier: valid
-        ? await createPasswordVerifier(proof, parsed.salt, parsed.iterations)
-        : null,
+      upgradedVerifier: valid ? await createPasswordVerifier(proof, parsed.salt, parsed.iterations) : null,
     };
   }
 

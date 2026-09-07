@@ -2,15 +2,12 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "have-guide",
   "main": "./src/server/index.ts",
-  "compatibility_date": "2026-08-02",
+  "compatibility_date": "2026-09-07",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "not_found_handling": "single-page-application",
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"]
-  },
-  "ai": {
-    "binding": "AI"
   },
   "d1_databases": [
     {
@@ -29,7 +26,8 @@
   "vars": {
     "APP_ENV": "production",
     "SESSION_DAYS": "30",
-    "MAX_UPLOAD_MB": "12"
+    "MAX_UPLOAD_MB": "12",
+    "ANTHROPIC_MODEL": "claude-sonnet-5"
   },
   "observability": {
     "enabled": true,

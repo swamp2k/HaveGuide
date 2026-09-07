@@ -1,11 +1,9 @@
 node_modules/
 dist/
 .wrangler/
-.dev.vars*
 worker-configuration.d.ts
-*.tsbuildinfo
-playwright-report/
-test-results/
-coverage/
-native/garden-scan/android/build/
+.dev.vars
+.env
+android/
+*.jks
 .DS_Store
