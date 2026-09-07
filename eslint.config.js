@@ -6,6 +6,13 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   { ignores: ['dist', 'node_modules', 'worker-configuration.d.ts'] },
   js.configs.recommended,
+  {
+    files: ['public/sw.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: { ...globals.serviceworker },
+    },
+  },
   ...tseslint.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
@@ -16,7 +23,7 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      '@typescript-eslint/no-explicit-any': 'off'
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
 );
