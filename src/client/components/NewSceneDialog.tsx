@@ -35,7 +35,7 @@ export function NewSceneDialog({ onClose, onCreated }: { onClose: () => void; on
         );
         image = await prepareGardenImage(
           files,
-          imageMode === 'panorama' ? { overlapRatio: PANORAMA_OVERLAP_RATIO } : undefined,
+          imageMode === 'panorama'\n            ? { layout: 'horizontal', overlapRatio: PANORAMA_OVERLAP_RATIO }\n            : undefined,
         );
       }
 
@@ -74,7 +74,7 @@ export function NewSceneDialog({ onClose, onCreated }: { onClose: () => void; on
           <p className="eyebrow">Nyt område</p>
           <h2 id="new-scene-title">Start med et foto</h2>
           <p className="muted">
-            Tag ét foto, eller brug guidekameraet til et lodret panorama. HaveGuide hjælper dig med overlap mellem billederne.
+            Tag ét foto, eller brug guidekameraet til et vandret panorama. Hold telefonen lodret — HaveGuide guider dig fra venstre mod højre.
           </p>
           <form className="stack" onSubmit={submit}>
             <label>
