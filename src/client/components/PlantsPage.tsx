@@ -86,6 +86,12 @@ export function PlantsPage({ garden, initialCapture, onDirtyChange }: Props) {
     locationRequest.current++; setLocationBusy(false);
     setCapture(false); setFile(null); setName(''); setNotes(''); setFeatureId(''); setPosition(null); progress.current = {}; setStarted(false);
   }
+  async function closeCapture() {
+    if (dirty && !window.confirm('Luk registreringen? En eventuelt allerede oprettet plante bliver i haven.')) return;
+    const partiallySaved = Boolean(progress.current.plantId);
+    reset();
+    if (partiallySaved) await load().catch((error: unknown) => setMessage(errorText(error)));
+  }
   async function save(identify: boolean) {
     if (lock.current || locationBusy || (!file && !name.trim())) return;
     lock.current = true; setBusy(true); setMessage(''); setStarted(true);
@@ -155,7 +161,7 @@ export function PlantsPage({ garden, initialCapture, onDirtyChange }: Props) {
       <div className="capture-save-actions">
         {canIdentify && <button className="primary-button" disabled={busy || locationBusy || !file} onClick={() => void save(true)}>{busy ? 'Arbejder…' : 'Gem og find planten'}</button>}
         <button className={canIdentify ? 'secondary-button' : 'primary-button'} disabled={busy || locationBusy || (!file && !name.trim())} onClick={() => void save(false)}>{busy ? 'Arbejder…' : 'Gem plante'}</button>
-        <button className="text-button" disabled={busy} onClick={() => { if (!dirty || window.confirm('Luk registreringen? En eventuelt allerede oprettet plante bliver i haven.')) reset(); }}>Luk</button>
+        <button className="text-button" disabled={busy} onClick={() => void closeCapture()}>Luk</button>
       </div>
     </section> : <>
       {active && <section className="plant-capture-card" aria-label="Valgt plante"><button className="text-button" onClick={() => setSelected(null)}>← Alle planter</button><h2>{active.commonName || 'Ukendt plante'}</h2>{active.scientificName && <p><i>{active.scientificName}</i></p>}{active.media[0] && <img className="capture-photo" src={active.media[0].contentUrl} alt={active.commonName || 'Plante'} />}{active.notes && <p>{active.notes}</p>}

@@ -7,4 +7,5 @@ worker-configuration.d.ts
 playwright-report/
 test-results/
 coverage/
+native/garden-scan/android/build/
 .DS_Store

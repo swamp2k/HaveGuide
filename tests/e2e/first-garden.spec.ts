@@ -57,6 +57,10 @@ test('first user can create, map, understand and plan a garden', async ({ page }
   await page.getByRole('button', { name: 'Mere', exact: true }).click();
   await page.getByRole('button', { name: /Observationer og detaljer/ }).click();
   await expect(page.getByRole('heading', { name: 'Forstå din have' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const nav = page.getByRole('navigation', { name: 'Hovednavigation' });
+  const navRows = await nav.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getBoundingClientRect().top));
+  expect(new Set(navRows).size).toBe(1);
 
   const captureWorkspace = await page.evaluate(async () => {
     const gardens = (await fetch('/api/gardens').then((response) => response.json())) as {
@@ -114,6 +118,7 @@ test('first user can create, map, understand and plan a garden', async ({ page }
   const plantResponse = await plantResponsePromise;
   expect(plantResponse.status(), await plantResponse.text()).toBe(201);
   await expect(page.getByRole('heading', { name: '1 registrerede planter' })).toBeVisible();
+  await page.screenshot({ path: 'test-results/details.png' });
 
   await page.getByText('Registrér haveforhold', { exact: true }).click();
   await page.getByLabel('Beskrivelse').fill('Sol fra middag til aften');
@@ -242,4 +247,15 @@ test('first user can create, map, understand and plan a garden', async ({ page }
   await expect(page.getByRole('heading', { name: 'Planlæg din have' })).toBeVisible();
   await expect(page.locator('.design-option')).toHaveCount(3);
   await expect(page.getByText('Valgt', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/design.png' });
+  await page.getByRole('button', { name: 'Opgaver', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Opgaver og haveforløb' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Opgaver og haveforløb' })).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await page.screenshot({ path: 'test-results/tasks.png' });
+  await page.getByRole('button', { name: 'Min have', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Hvad vil du i haven?' })).toBeVisible();
+  expect(await nav.evaluate((element) => getComputedStyle(element).position)).toBe('fixed');
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });

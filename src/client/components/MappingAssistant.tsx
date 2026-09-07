@@ -23,6 +23,7 @@ export function MappingAssistant({ garden }: MappingAssistantProps) {
   const [targetFeatureId, setTargetFeatureId] = useState('');
 
   const load = useCallback(async () => {
+    setMessage('');
     try {
       const response = await captureApi.getWorkspace(garden.id);
       setWorkspace(response.workspace);

@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useState, type ReactNode } from 'react';
+import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import type { Garden, GardenDetail, UserSummary } from '../../shared/types';
 import './AppShell.css';
 
@@ -36,6 +36,17 @@ class PageBoundary extends Component<{ children: ReactNode }, { failed: boolean 
     if (this.state.failed) return <div className="page" role="alert"><h1>Siden kunne ikke åbnes</h1><p>Prøv igen, når du har forbindelse.</p><button className="primary-button" onClick={() => window.location.reload()}>Prøv igen</button></div>;
     return this.props.children;
   }
+}
+
+function PageStart() {
+  // Run after the lazy page commits, so scroll anchoring cannot retain the old page's position.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    const heading = document.querySelector<HTMLElement>('.app-content h1, .app-content h2');
+    heading?.setAttribute('tabindex', '-1');
+    heading?.focus({ preventScroll: true });
+  }, []);
+  return null;
 }
 
 export function AppShell({ user, gardens, garden, onSelectGarden, onGardenChanged, onLogout }: AppShellProps) {
@@ -82,6 +93,7 @@ export function AppShell({ user, gardens, garden, onSelectGarden, onGardenChange
           {tab === 'more' && <main className="page"><h1>Mere til din have</h1><p className="lead">Vælg det, du har brug for.</p><div className="garden-tool-grid">
             {([{ id: 'design', title: 'Idéer og planer', text: 'Undersøg muligheder for at ændre haven.' }, { id: 'scan', title: 'Scan et område', text: 'Lad telefonen hjælpe med at kortlægge haven.' }, { id: 'edit', title: 'Redigér havekort', text: 'Ret grænser, bede og andre områder på luftfotoet.' }, { id: 'understanding', title: 'Observationer og detaljer', text: 'Notér jord, lys og problemer. Redigér dine planter.' }, { id: 'settings', title: 'Indstillinger', text: 'Have, konto og billeder.' }] as const).map((item) => <button key={item.id} onClick={() => go(item.id)}><strong>{item.title}</strong><span>{item.text}</span><span aria-hidden="true">→</span></button>)}
           </div></main>}
+          <PageStart />
         </Suspense></PageBoundary>
       </div>
       <nav className="bottom-nav" aria-label="Hovednavigation">{navigation.map((item) => <button key={item.id} className={tab === item.id || (item.id === 'more' && secondary) ? 'active' : ''} aria-current={tab === item.id ? 'page' : undefined} onClick={() => go(item.id)}><span aria-hidden="true">{item.icon}</span><span>{item.label}</span></button>)}</nav>

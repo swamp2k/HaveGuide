@@ -1,0 +1,22 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "have-guide-e2e",
+  "main": "../../src/server/index.ts",
+  "compatibility_date": "2026-08-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  // AI has no local simulator. AI responses are mocked by browser tests.
+  // Separate config directory also avoids loading the project's .dev.vars.
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "haveguide-e2e",
+    "database_id": "00000000-0000-0000-0000-000000000001",
+    "migrations_dir": "../../migrations"
+  }],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "haveguide-e2e" }],
+  "vars": { "APP_ENV": "test", "SESSION_DAYS": "30", "MAX_UPLOAD_MB": "12" }
+}
