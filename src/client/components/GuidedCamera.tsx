@@ -121,22 +121,19 @@ export function GuidedCamera({ onCancel, onComplete, onFallback }: GuidedCameraP
 
   function retake() {
     setCaptures((current) => current.slice(0, -1));
-    if (panorama) {
-      setStage('shoot');
-    } else {
-      setStage('shoot');
-      setPanorama(false);
-    }
+    setStage('shoot');
+    if (!panorama) setPanorama(false);
   }
 
   const guideActive = stage === 'shoot' && panorama && captures.length > 0 && lastPreviewUrl;
   const reviewActive = stage !== 'shoot' && lastPreviewUrl;
+  const overlapPercent = PANORAMA_OVERLAP_RATIO * 100;
 
   return (
     <section className="guided-camera" role="dialog" aria-modal="true" aria-label="Guidekamera">
       <div className="camera-topbar">
         <button type="button" className="camera-text-button" onClick={onCancel}>Luk</button>
-        <strong>{panorama ? `Panorama · ${captures.length}/6` : 'Tag foto'}</strong>
+        <strong>{panorama ? `Panorama → · ${captures.length}/6` : 'Tag foto'}</strong>
         <span className="camera-topbar-spacer" aria-hidden="true" />
       </div>
 
@@ -147,17 +144,23 @@ export function GuidedCamera({ onCancel, onComplete, onFallback }: GuidedCameraP
           <>
             <div
               className="camera-overlap-guide"
-              style={{ height: `${PANORAMA_OVERLAP_RATIO * 100}%` }}
+              style={{ width: `${overlapPercent}%` }}
               aria-hidden="true"
             >
               <img src={lastPreviewUrl} alt="" />
-              <div className="camera-overlap-label">MATCH FORRIGE FOTO HER</div>
             </div>
             <div
               className="camera-guide-line"
-              style={{ top: `${PANORAMA_OVERLAP_RATIO * 100}%` }}
+              style={{ left: `${overlapPercent}%` }}
               aria-hidden="true"
             />
+            <div
+              className="camera-overlap-label"
+              style={{ left: `calc(${overlapPercent}% + 10px)` }}
+              aria-hidden="true"
+            >
+              ← MATCH FORRIGE FOTO
+            </div>
           </>
         )}
 
@@ -171,13 +174,13 @@ export function GuidedCamera({ onCancel, onComplete, onFallback }: GuidedCameraP
           <div className="camera-instruction">
             {guideActive ? (
               <>
-                <strong>Flyt kameraet nedad</strong>
-                <span>Match den gennemsigtige stribe med det samme område i livebilledet.</span>
+                <strong>Panorér mod højre →</strong>
+                <span>Match den gennemsigtige venstre stribe med højre kant fra forrige foto.</span>
               </>
             ) : (
               <>
-                <strong>Start øverst i området</strong>
-                <span>Hold telefonen lodret og nogenlunde samme afstand hele vejen.</span>
+                <strong>Start i venstre side af området</strong>
+                <span>Hold telefonen lodret og nogenlunde samme afstand, mens du bevæger dig mod højre.</span>
               </>
             )}
           </div>
@@ -198,7 +201,7 @@ export function GuidedCamera({ onCancel, onComplete, onFallback }: GuidedCameraP
         {stage === 'shoot' && !cameraError && (
           <>
             <span className="camera-control-hint">
-              {guideActive ? 'Ca. 24 % overlap giver den pæneste samling.' : 'Tag første billede.'}
+              {guideActive ? 'Ca. 24 % overlap giver en stabil samling.' : 'Tag første billede i venstre side.'}
             </span>
             <button
               type="button"
@@ -209,15 +212,15 @@ export function GuidedCamera({ onCancel, onComplete, onFallback }: GuidedCameraP
             >
               <span />
             </button>
-            <span className="camera-control-hint">{capturing ? 'Gemmer…' : ''}</span>
+            <span className="camera-control-hint">{capturing ? 'Gemmer…' : panorama ? 'Fortsæt mod højre →' : ''}</span>
           </>
         )}
 
         {stage === 'first-choice' && (
           <div className="camera-choice-card">
             <div>
-              <strong>Vil du lave et lodret panorama?</strong>
-              <span>HaveGuide guider næste foto og bruger overlap til at samle billederne.</span>
+              <strong>Vil du lave et vandret panorama?</strong>
+              <span>Behold telefonen lodret. HaveGuide guider dig mod højre med overlap fra foto til foto.</span>
             </div>
             <div className="camera-choice-actions">
               <button type="button" className="secondary" onClick={retake}>Tag om</button>
@@ -242,7 +245,7 @@ export function GuidedCamera({ onCancel, onComplete, onFallback }: GuidedCameraP
           <div className="camera-choice-card">
             <div>
               <strong>{captures.length} billeder klar</strong>
-              <span>Færdig nu, eller fortsæt længere ned gennem området.</span>
+              <span>Færdig nu, eller fortsæt længere mod højre gennem området.</span>
             </div>
             <div className="camera-choice-actions">
               <button type="button" className="secondary" onClick={retake}>Tag om</button>
@@ -251,7 +254,7 @@ export function GuidedCamera({ onCancel, onComplete, onFallback }: GuidedCameraP
               </button>
               {captures.length < 6 && (
                 <button type="button" className="secondary" onClick={() => setStage('shoot')}>
-                  Tag næste
+                  Tag næste →
                 </button>
               )}
             </div>

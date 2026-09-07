@@ -287,33 +287,30 @@ legend { margin-bottom: 9px; }
   position: absolute;
   z-index: 5;
   top: 0;
+  bottom: 0;
   left: 0;
-  right: 0;
   overflow: hidden;
-  border-bottom: 2px dashed rgba(255,255,255,.92);
+  border-right: 2px dashed rgba(255,255,255,.92);
   background: rgba(59, 113, 79, .2);
   pointer-events: none;
 }
 
 .camera-overlap-guide img {
   position: absolute;
-  left: 0;
+  top: 0;
   right: 0;
-  bottom: 0;
-  width: 100%;
-  height: auto;
-  min-height: 100%;
+  width: 100vw;
+  height: 100%;
   object-fit: cover;
-  object-position: center bottom;
+  object-position: center center;
   opacity: .46;
   filter: saturate(.75) contrast(1.05);
 }
 
 .camera-overlap-label {
   position: absolute;
-  left: 50%;
-  bottom: 8px;
-  transform: translateX(-50%);
+  z-index: 7;
+  top: 14px;
   white-space: nowrap;
   padding: .35rem .6rem;
   border-radius: 999px;
@@ -322,14 +319,16 @@ legend { margin-bottom: 9px; }
   font-size: .65rem;
   font-weight: 850;
   letter-spacing: .08em;
+  pointer-events: none;
 }
 
 .camera-guide-line {
   position: absolute;
   z-index: 6;
-  left: 14px;
-  right: 14px;
-  height: 2px;
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  transform: translateX(-1px);
   background: rgba(255,255,255,.94);
   box-shadow: 0 0 0 1px rgba(0,0,0,.25);
   pointer-events: none;
