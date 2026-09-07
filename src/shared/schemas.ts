@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { PASSWORD_KDF, PASSWORD_KDF_ITERATIONS } from './auth';
 
-export const passwordChallengeRequestSchema = z.object({ username: z.string().trim().min(1).max(80) });
+export const passwordChallengeRequestSchema = z.object({
+  username: z.string().trim().min(1).max(80),
+});
+
 export const passwordSetupSchema = z.object({
   username: z.string().trim().min(2).max(80),
   proof: z.string().min(20),
@@ -9,6 +12,7 @@ export const passwordSetupSchema = z.object({
   iterations: z.literal(PASSWORD_KDF_ITERATIONS),
   algorithm: z.literal(PASSWORD_KDF),
 });
+
 export const passwordLoginSchema = passwordSetupSchema.pick({ username: true, proof: true });
 
 export const sceneCreateSchema = z.object({
@@ -21,14 +25,12 @@ export const sceneUpdateSchema = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
-const nullableEnum = <T extends [string, ...string[]]>(values: T) => z.enum(values).nullable();
-
 export const areaProfileSchema = z.object({
-  sun: nullableEnum(['full_sun', 'part_sun', 'shade']),
-  moisture: nullableEnum(['dry', 'normal', 'moist', 'wet']),
-  soil: nullableEnum(['sand', 'loam', 'clay', 'mixed', 'unknown']),
-  drainage: nullableEnum(['fast', 'normal', 'slow', 'unknown']),
-  wind: nullableEnum(['sheltered', 'normal', 'exposed', 'unknown']),
+  sun: z.enum(['full_sun', 'part_sun', 'shade']).nullable(),
+  moisture: z.enum(['dry', 'normal', 'moist', 'wet']).nullable(),
+  soil: z.enum(['sand', 'loam', 'clay', 'mixed', 'unknown']).nullable(),
+  drainage: z.enum(['fast', 'normal', 'slow', 'unknown']).nullable(),
+  wind: z.enum(['sheltered', 'normal', 'exposed', 'unknown']).nullable(),
   notes: z.string().trim().max(3000),
   goals: z.array(z.string().trim().min(1).max(80)).max(12),
 });

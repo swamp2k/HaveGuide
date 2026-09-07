@@ -12,9 +12,13 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64ToBytes(value: string): Uint8Array {
+function base64ToArrayBuffer(value: string): ArrayBuffer {
   const binary = atob(value);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
 }
 
 export function newPasswordChallenge(): PasswordChallenge {
@@ -25,11 +29,25 @@ export function newPasswordChallenge(): PasswordChallenge {
   };
 }
 
-export async function derivePasswordProof(password: string, challenge: PasswordChallenge): Promise<string> {
+export async function derivePasswordProof(
+  password: string,
+  challenge: PasswordChallenge,
+): Promise<string> {
   if (challenge.algorithm !== PASSWORD_KDF) throw new Error('Ukendt password-algoritme.');
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  );
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: base64ToBytes(challenge.salt), iterations: challenge.iterations },
+    {
+      name: 'PBKDF2',
+      hash: 'SHA-256',
+      salt: base64ToArrayBuffer(challenge.salt),
+      iterations: challenge.iterations,
+    },
     key,
     PASSWORD_PROOF_BYTES * 8,
   );
