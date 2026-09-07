@@ -1,30 +1,23 @@
-import { getCookie, setCookie } from 'hono/cookie';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Context } from 'hono';
+import type { AppEnvironment } from '../types';
 
-export const SESSION_COOKIE = 'have_guide_session';
+const COOKIE_NAME = 'haveguide_session';
 
-export function readSessionCookie(c: Context): string | undefined {
-  return getCookie(c, SESSION_COOKIE);
+export function readSessionCookie(c: Context<AppEnvironment>): string | undefined {
+  return getCookie(c, COOKIE_NAME);
 }
 
-export function writeSessionCookie(c: Context, token: string, maxAgeSeconds: number): void {
-  const secure = new URL(c.req.url).protocol === 'https:';
-  setCookie(c, SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure,
-    sameSite: 'Lax',
+export function writeSessionCookie(c: Context<AppEnvironment>, token: string, maxAge: number): void {
+  setCookie(c, COOKIE_NAME, token, {
     path: '/',
-    maxAge: maxAgeSeconds,
+    httpOnly: true,
+    sameSite: 'Lax',
+    secure: c.env.APP_ENV === 'production',
+    maxAge,
   });
 }
 
-export function clearSessionCookie(c: Context): void {
-  const secure = new URL(c.req.url).protocol === 'https:';
-  setCookie(c, SESSION_COOKIE, '', {
-    httpOnly: true,
-    secure,
-    sameSite: 'Lax',
-    path: '/',
-    maxAge: 0,
-  });
+export function clearSessionCookie(c: Context<AppEnvironment>): void {
+  deleteCookie(c, COOKIE_NAME, { path: '/' });
 }

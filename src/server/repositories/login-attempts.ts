@@ -1,18 +1,18 @@
 import { nowIso } from '../utils/time';
 
-const WINDOW_MINUTES = 15;
-const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 15 * 60 * 1000;
+const MAX_FAILURES = 8;
 
-function windowStartIso(): string {
-  return new Date(Date.now() - WINDOW_MINUTES * 60 * 1000).toISOString();
+function cutoffIso(): string {
+  return new Date(Date.now() - WINDOW_MS).toISOString();
 }
 
 export async function isLoginBlocked(db: D1Database, identityHash: string): Promise<boolean> {
   const row = await db
     .prepare('SELECT COUNT(*) AS count FROM login_attempts WHERE identity_hash = ? AND attempted_at >= ?')
-    .bind(identityHash, windowStartIso())
+    .bind(identityHash, cutoffIso())
     .first<{ count: number }>();
-  return (row?.count ?? 0) >= MAX_ATTEMPTS;
+  return Number(row?.count ?? 0) >= MAX_FAILURES;
 }
 
 export async function recordLoginFailure(db: D1Database, identityHash: string): Promise<void> {
@@ -27,6 +27,5 @@ export async function clearLoginFailures(db: D1Database, identityHash: string): 
 }
 
 export async function pruneLoginFailures(db: D1Database): Promise<void> {
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  await db.prepare('DELETE FROM login_attempts WHERE attempted_at < ?').bind(cutoff).run();
+  await db.prepare('DELETE FROM login_attempts WHERE attempted_at < ?').bind(cutoffIso()).run();
 }

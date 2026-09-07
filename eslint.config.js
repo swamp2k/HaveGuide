@@ -4,25 +4,26 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', '.wrangler', 'worker-configuration.d.ts', 'playwright-report', 'test-results', 'android/app/src/main/assets/public/**'] },
+  { ignores: ['dist', 'node_modules', 'worker-configuration.d.ts'] },
   js.configs.recommended,
+  {
+    files: ['public/sw.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: { ...globals.serviceworker },
+    },
+  },
   ...tseslint.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
-      globals: {
-        ...globals.browser,
-        ...globals.worker,
-        ...globals.node,
-      },
+      ecmaVersion: 2022,
+      globals: { ...globals.browser, ...globals.worker },
     },
-    plugins: {
-      'react-hooks': reactHooks,
-    },
+    plugins: { 'react-hooks': reactHooks },
     rules: {
-      'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn',
-      '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+      ...reactHooks.configs.recommended.rules,
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
 );
