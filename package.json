@@ -17,8 +17,8 @@
     "test:watch": "vitest",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "native:add:android": "npm run build && npx cap add android",
-    "native:sync:android": "npm run build && npx cap sync android",
+    "native:add:android": "npm run build && npx cap add android && node scripts/ensure-android-camera-permission.mjs",
+    "native:sync:android": "npm run build && node scripts/ensure-android-camera-permission.mjs && npx cap sync android",
     "native:open:android": "npx cap open android",
     "native:run:android": "npm run native:sync:android && npx cap run android",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build"
