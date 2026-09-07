@@ -30,7 +30,8 @@ The PR's 17 original changed files were reviewed against the current API client,
 - `android/gradlew.bat assembleDebug`: passed with Java 21, SDK 36 and Gradle 8.14.3. APK exists at `android/app/build/outputs/apk/debug/app-debug.apk` (6,939,103 bytes); its bundled entry is the current `index-Cx7AcW-0.js`.
   SHA-256: `a5c6168e588f5554a15127467062ae10dfe25ea8e755a360c3469fc6b9a9476e`.
 - Java and Android command-line tools were downloaded into ignored `.wrangler/android-tools/` because the machine had no Android toolchain. Gradle also populated its normal user cache. Generated native plugin build output is ignored.
-- `adb devices`: no devices attached. APK installation, camera/gallery in Android WebView, login/session behaviour and physical smoke testing remain unverified. Native capture precision requires a physical device; web tests do not establish ARCore accuracy.
-- No Cloudflare deployment, remote D1 migration or merge to main. PR #6 remains draft pending physical Android testing.
+- `adb devices`: Motorola Edge 70 Fusion (`ZY22MRJPVK`) was attached and authorized. A prior installation with a different signing key was removed after explicit approval, then the current debug APK installed successfully. Launch smoke test passed: Android reports `dev.srgoodjob.haveguide/.MainActivity` in focus and the app process is running.
+- Camera/gallery, login/session and Smart Scan/ARCore still need interactive feature validation on the device. The launch smoke test does not establish ARCore precision.
+- No Cloudflare deployment, remote D1 migration or merge to main. PR #6 remains draft pending the remaining interactive Android checks.
 
 The main JavaScript entry is now approximately 226 kB (72 kB gzip), with separate page chunks. The home screen still loads MapLibre (approximately 1.05 MB / 285 kB gzip); the entry reduction is not the total initial-page transfer reduction.
