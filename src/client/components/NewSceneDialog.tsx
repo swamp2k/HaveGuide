@@ -35,7 +35,9 @@ export function NewSceneDialog({ onClose, onCreated }: { onClose: () => void; on
         );
         image = await prepareGardenImage(
           files,
-          imageMode === 'panorama'\n            ? { layout: 'horizontal', overlapRatio: PANORAMA_OVERLAP_RATIO }\n            : undefined,
+          imageMode === 'panorama'
+            ? { layout: 'horizontal', overlapRatio: PANORAMA_OVERLAP_RATIO }
+            : undefined,
         );
       }
 
