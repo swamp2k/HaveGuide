@@ -61,7 +61,9 @@ function describeFailure(status: number, body: string): ImageEditError {
   }
   if (status === 429) {
     // OpenAI also answers 429 when the account is out of credit, which is not a retry situation.
-    const outOfCredit = /insufficient_quota|billing|exceeded your current quota/i.test(`${detail} ${code}`);
+    const outOfCredit =
+      /insufficient_quota|credit_balance_exhausted|billing_hard_limit_reached/i.test(code) ||
+      /no credits remaining|exceeded your current quota|insufficient[_ ]quota|billing/i.test(detail);
     return new ImageEditError(
       `${outOfCredit ? 'OpenAI-kontoen har ikke mere kvote.' : 'Billedmodellen er optaget lige nu.'}${suffix}`,
       outOfCredit ? 'no-credit' : 'rate-limited',

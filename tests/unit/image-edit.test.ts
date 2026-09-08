@@ -121,6 +121,24 @@ describe('OpenAiImageEditProvider', () => {
       .rejects.toMatchObject({ code: 'no-credit' });
   });
 
+  it('recognises the real out-of-credit shape OpenAI returns', async () => {
+    // Verbatim from production: the code, not just the message, has to be enough.
+    stubFetch(
+      jsonResponse(
+        {
+          error: {
+            code: 'credit_balance_exhausted',
+            message: 'You have no credits remaining. Add credits to continue using the API.',
+          },
+        },
+        429,
+      ),
+    );
+    const provider = new OpenAiImageEditProvider('sk-test');
+    await expect(provider.edit({ image: sourceImage(), contentType: 'image/jpeg', prompt: 'x' }))
+      .rejects.toMatchObject({ code: 'no-credit' });
+  });
+
   it('keeps the upstream detail on the error so logs stay diagnosable', async () => {
     stubFetch(
       jsonResponse({ error: { code: 'insufficient_quota', message: 'You exceeded your current quota.' } }, 429),
