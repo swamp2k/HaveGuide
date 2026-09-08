@@ -12,7 +12,9 @@ app.use('*', secureHeaders({
     defaultSrc: ["'self'"],
     imgSrc: ["'self'", 'blob:', 'data:'],
     styleSrc: ["'self'", "'unsafe-inline'"],
-    scriptSrc: ["'self'"],
+    // 'wasm-unsafe-eval' is what lets the bundled OpenCV build compile its WebAssembly for
+    // panorama stitching. It permits WASM compilation only, not eval() of JavaScript.
+    scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
     connectSrc: ["'self'"],
   },
   referrerPolicy: 'same-origin',

@@ -29,12 +29,29 @@ it is the normal case, and the user must never have to match a timestamp to a ph
 - Do not infer soil type, pH, drainage, or moisture from a photo as if it were measured data.
 - Keep image editing provider-independent. Anthropic analysis is not image generation.
 
-## Not the task
+## Panorama
 
-The guided panorama camera joins photos horizontally and crops the overlap. It is deliberately
-**not** computer-vision stitching — no feature matching, homography or blending. Leave it working
-and secondary; do not spend a pass turning it into OpenCV. Manual capture/upload is the preferred
-path.
+Panorama stitching is real: ORB features, BFMatcher + Lowe ratio, RANSAC homographies, cumulative
+transforms, feather blending, crop. It lives in `src/client/panorama/` and runs **client-side** —
+never move it to the Worker. Photos stay on the device, Worker CPU/memory limits do not apply, and
+PWA and APK behave the same.
+
+Rules for anyone touching it:
+
+- Every OpenCV object (`Mat`, `KeyPointVector`, `DMatchVectorVector`, `BFMatcher`, `ORB`,
+  homography, mask) must be released in a `finally`. Android pays for leaks first.
+- Never resolve or return the OpenCV module from a promise. Emscripten makes it thenable, so the
+  promise adopts it and re-enters `then` forever, freezing the tab. `opencv-loader.ts` boxes it and
+  deletes `then`; keep it that way.
+- Keep `geometry.ts` free of OpenCV. It holds the parts worth unit testing.
+- A pair that cannot be aligned must surface as a failure naming the two photos. Never fall back to
+  the fixed-overlap join silently — the user chooses that explicitly, and it is labelled
+  "Saml uden billedtilpasning" because it is not stitching.
+- Multiple selected photos are never assumed to be a panorama; ask.
+- Normalise EXIF orientation before OpenCV sees a frame.
+
+Multi-band blending and a Web Worker are both reasonable future work. Neither is required, and
+neither is worth breaking reliability for.
 
 ## Storage
 

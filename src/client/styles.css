@@ -985,3 +985,50 @@ legend { margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
   .camera-choice-actions button { width: 100%; }
   .camera-control-hint { font-size: 0.68rem; }
 }
+
+/* ---- panorama stitching ---------------------------------------------- */
+
+.panorama-card { width: min(420px, 100%); text-align: center; }
+
+.panorama-working { display: grid; justify-items: center; gap: 12px; padding: 12px 0; }
+.panorama-working strong { font-size: 1.02rem; }
+
+.panorama-track {
+  width: min(260px, 100%);
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  overflow: hidden;
+}
+.panorama-track span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
+.panorama-choices { display: grid; gap: 8px; }
+.panorama-choices button { width: 100%; }
+
+.photo-mode-choice { display: grid; gap: 8px; }
+.photo-mode-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.mode-card {
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent-soft) 42%, var(--panel));
+  border: 1px solid var(--line);
+  padding: 13px 12px;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  min-height: 66px;
+  align-content: center;
+}
+.mode-card:hover { background: var(--accent-soft); }
+.mode-card strong { font-size: 0.94rem; }
+.mode-card small { color: var(--muted); font-size: 0.76rem; line-height: 1.3; }
+
+@media (max-width: 560px) {
+  .photo-mode-buttons { grid-template-columns: 1fr; }
+}

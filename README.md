@@ -13,10 +13,46 @@ AI-forslag er låst, indtil sol, fugt, jord og dræn er angivet. Det er bevidst:
 
 ### Fotos
 
-- **Manuelt valg:** vælger du flere fotos, samles de **lodret** til ét oversigtsfoto.
-- **Guidekamera:** optager en serie fra venstre mod højre og samler dem **vandret**, hvor overlappet
-  klippes fra. Det er en enkel sammensætning, ikke rigtig panorama-stitching (ingen feature matching
-  eller perspektivkorrektion). Manuelt foto er den anbefalede vej indtil videre.
+Vælger du flere fotos — fra guidekameraet eller fra galleriet — spørger HaveGuide, hvad de er:
+
+- **Lav panorama:** fotos taget fra venstre mod højre samles med rigtig billedtilpasning.
+- **Saml lodret:** fotos oven på hinanden, sat sammen uden tilpasning.
+
+### Panorama
+
+Panoramaer samles i browseren, ikke på serveren. Fotoene forlader aldrig telefonen for at blive
+samlet, og en Worker skal hverken bruge CPU eller hukommelse på det. Det virker ens i PWA og APK.
+
+Pipelinen (`src/client/panorama/`):
+
+1. Fotos afkodes med EXIF-rotationen anvendt, så OpenCV ser dem som brugeren så dem.
+   Der laves to kopier: en lille til matching (maks. 1200 px) og en større til selve samlingen
+   (maks. 1600 px).
+2. ORB finder op til 2000 features pr. foto på et histogram-udlignet gråtonebillede — løv er
+   kontrastfattigt og gentager sig selv, så udligningen giver mærkbart flere brugbare features.
+3. Nabopar matches med BFMatcher/Hamming, kNN og Lowes ratio-test.
+4. `findHomography` med RANSAC estimerer sammenhængen for hvert par.
+5. Parvise transformationer kædes sammen til fælles koordinater (`H_n = H_{n-1} · relation`),
+   alle hjørner transformeres for at finde lærredets størrelse, og alt forskydes positivt.
+6. Hvert foto warpes ind på lærredet med en feather-maske i alfakanalen. Farverne akkumuleres
+   vægtet og divideres til sidst med den samlede vægt, så overlap krydsfader i stedet for at give
+   en synlig lodret kant.
+7. Tomme kanter beskæres væk, og resultatet gemmes som JPEG.
+
+**Samlingen kan afvises.** Et par godkendes kun med nok gode matches, nok RANSAC-inliers, en
+fornuftig inlier-andel og en realistisk geometri — og fordi optagelsen altid går fra venstre mod
+højre, afvises løsninger, der flytter det næste foto den forkerte vej eller alt for langt. Slår det
+fejl, får brugeren at vide hvilke to fotos der ikke passer sammen, og kan tage fotoet om, bruge
+billederne hver for sig eller vælge *Saml uden billedtilpasning*. Der uploades aldrig et forvrænget
+panorama, som app'en kalder samlet.
+
+OpenCV.js ligger i `public/vendor/opencv.js` (kopieres fra `node_modules` af
+`npm run vendor:opencv`, som `dev` og `build` kører automatisk). Filen er gitignored og hentes
+først, når nogen faktisk laver et panorama — den er ikke en del af app-bundlen. WebAssembly kræver
+`'wasm-unsafe-eval'` i CSP'en; det tillader kun WASM-kompilering, ikke `eval()` af JavaScript.
+
+`panorama-harness.html` er et udviklingsværktøj: `npm run dev` og åbn `/panorama-harness.html` for
+at køre samlingen mod syntetiske havebilleder. Den kommer ikke med i en build.
 
 ### Plantekort
 

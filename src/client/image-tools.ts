@@ -1,4 +1,11 @@
-export const PANORAMA_OVERLAP_RATIO = 0.24;
+/**
+ * How much of the previous frame the guide asks the user to keep in view.
+ *
+ * Gardens are full of repeating foliage, so feature matching needs a generous overlap to find
+ * an alignment it can trust. This is the target for the capture guide; the stitcher measures
+ * the real overlap itself rather than assuming this value.
+ */
+export const PANORAMA_OVERLAP_RATIO = 0.35;
 
 interface PrepareGardenImageOptions {
   overlapRatio?: number;
@@ -48,6 +55,11 @@ function prepareVerticalCanvas(bitmaps: ImageBitmap[]): HTMLCanvasElement {
   return canvas;
 }
 
+/**
+ * Fallback join: crops a fixed overlap and butts the frames together, with no image alignment.
+ * Only used when the user explicitly picks "Saml uden billedtilpasning" after real stitching
+ * has failed — it is not a panorama and must never be presented as one.
+ */
 function prepareHorizontalPanoramaCanvas(
   bitmaps: ImageBitmap[],
   overlapRatio: number,
@@ -123,7 +135,7 @@ export async function prepareGardenImage(
       canvas,
       files.length > 1
         ? layout === 'horizontal'
-          ? 'haveomraade-panorama.jpg'
+          ? 'haveomraade-samlet.jpg'
           : 'haveomraade-stitch.jpg'
         : 'haveomraade.jpg',
     );
