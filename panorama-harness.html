@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="da">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Panorama harness</title>
+    <style>
+      body { font: 14px system-ui; margin: 0; padding: 16px; background: #14201a; color: #eee; }
+      #log { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
+      img, canvas { max-width: 100%; display: block; margin: 8px 0; border: 1px solid #2c3b32; }
+      .strip img { height: 90px; width: auto; display: inline-block; margin-right: 4px; }
+    </style>
+  </head>
+  <body>
+    <h1>Panorama harness</h1>
+    <div class="strip" id="inputs"></div>
+    <div id="out"></div>
+    <div id="log"></div>
+    <script type="module" src="/src/client/panorama-harness.ts"></script>
+  </body>
+</html>

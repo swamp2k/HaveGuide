@@ -4,7 +4,10 @@ import { isProfileComplete } from '../../shared/profile';
 import { api } from '../api';
 import { prepareGardenImage } from '../image-tools';
 import type { ThemeId } from '../theme';
+import { MAX_PANORAMA_PHOTOS } from '../panorama/stitch-panorama';
 import { AnalysisSection } from './AnalysisSection';
+import { PanoramaBuilder, type PanoramaOutcome } from './PanoramaBuilder';
+import { PhotoModeChoice } from './PhotoModeChoice';
 import { PlantCaptureDialog } from './PlantCaptureDialog';
 import { PlantCardsSection } from './PlantCardsSection';
 import { ProfileEditor } from './ProfileEditor';
@@ -40,6 +43,8 @@ export function SceneDetail({
   const [question, setQuestion] = useState('');
   const [askOpen, setAskOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [pendingPhotos, setPendingPhotos] = useState<File[] | null>(null);
+  const [stitching, setStitching] = useState<File[] | null>(null);
   const sceneFileRef = useRef<HTMLInputElement>(null);
 
   const sceneImages = useMemo(() => scene.images.filter((image) => image.kind === 'scene'), [scene.images]);
@@ -64,20 +69,62 @@ export function SceneDetail({
     setScene((current) => ({ ...current, profile }));
   }
 
-  async function uploadScenePhotos(files: File[]) {
+  /** Uploads an image that has already been prepared (a finished panorama, say). */
+  async function uploadPrepared(file: File) {
+    setBusyAction('photo');
+    setError('');
+    try {
+      const { scene: updated } = await api.uploadImage(scene.id, file, 'scene');
+      setScene(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kunne ikke gemme fotoet.');
+    } finally {
+      setBusyAction('');
+    }
+  }
+
+  async function uploadScenePhotos(files: File[], layout: 'vertical' | 'each' = 'vertical') {
     if (files.length === 0) return;
     setBusyAction('photo');
     setError('');
     try {
-      const prepared = await prepareGardenImage(files);
-      const { scene: updated } = await api.uploadImage(scene.id, prepared, 'scene');
-      setScene(updated);
+      if (layout === 'each') {
+        let latest = scene;
+        for (const file of files) {
+          const prepared = await prepareGardenImage([file]);
+          latest = (await api.uploadImage(scene.id, prepared, 'scene')).scene;
+        }
+        setScene(latest);
+      } else {
+        const prepared = await prepareGardenImage(files);
+        const { scene: updated } = await api.uploadImage(scene.id, prepared, 'scene');
+        setScene(updated);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kunne ikke gemme fotoet.');
     } finally {
       setBusyAction('');
       if (sceneFileRef.current) sceneFileRef.current.value = '';
     }
+  }
+
+  function acceptPanorama(outcome: PanoramaOutcome) {
+    setStitching(null);
+    setPendingPhotos(null);
+    if (outcome.kind === 'separate') {
+      void uploadScenePhotos(outcome.files, 'each');
+      return;
+    }
+    void uploadPrepared(outcome.file);
+  }
+
+  function pickPhotos(files: File[]) {
+    if (files.length === 0) return;
+    if (files.length === 1) {
+      void uploadScenePhotos(files);
+      return;
+    }
+    setPendingPhotos(files);
   }
 
   async function identifyPlant(file: File, organ: PlantOrgan): Promise<PlantIdentification> {
@@ -197,7 +244,10 @@ export function SceneDetail({
               type="file"
               accept="image/*"
               multiple
-              onChange={(event) => uploadScenePhotos(Array.from(event.target.files ?? []).slice(0, 6))}
+              onChange={(event) => {
+                pickPhotos(Array.from(event.target.files ?? []).slice(0, MAX_PANORAMA_PHOTOS));
+                event.target.value = '';
+              }}
             />
             {busyAction === 'photo' ? 'Arbejder…' : primaryImage ? 'Nyt foto' : 'Tilføj foto'}
           </label>
@@ -286,6 +336,32 @@ export function SceneDetail({
           <strong>Ingen svar endnu</strong>
           <span>Start med “Se på området”.</span>
         </div>
+      )}
+
+      {pendingPhotos && !stitching && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setPendingPhotos(null)}>
+          <section className="modal-card" role="dialog" aria-modal="true" aria-label="Vælg billedtype">
+            <button className="icon-button modal-close" onClick={() => setPendingPhotos(null)} aria-label="Luk">×</button>
+            <PhotoModeChoice
+              count={pendingPhotos.length}
+              onPanorama={() => setStitching(pendingPhotos)}
+              onVertical={() => {
+                const files = pendingPhotos;
+                setPendingPhotos(null);
+                void uploadScenePhotos(files);
+              }}
+            />
+          </section>
+        </div>
+      )}
+
+      {stitching && (
+        <PanoramaBuilder
+          files={stitching}
+          onDone={acceptPanorama}
+          onRetake={() => { setStitching(null); setPendingPhotos(null); }}
+          onCancel={() => { setStitching(null); setPendingPhotos(null); }}
+        />
       )}
 
       {captureOpen && (

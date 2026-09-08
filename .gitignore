@@ -7,3 +7,4 @@ worker-configuration.d.ts
 android/
 *.jks
 .DS_Store
+public/vendor/
