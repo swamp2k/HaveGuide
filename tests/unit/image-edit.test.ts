@@ -49,8 +49,8 @@ describe('OpenAiImageEditProvider', () => {
     expect(form.get('quality')).toBe(DEFAULT_IMAGE_QUALITY);
     expect(form.get('prompt')).toBe('flere stauder');
     expect(form.get('n')).toBe('1');
-    // Without high input fidelity the model reinvents the garden instead of editing the photo.
-    expect(form.get('input_fidelity')).toBe('high');
+    // gpt-image-2 is high fidelity by default and rejects the parameter, so it must not be sent.
+    expect(form.get('input_fidelity')).toBeNull();
     expect(form.get('image')).toBeInstanceOf(Blob);
 
     expect(result.contentType).toBe('image/png');
@@ -66,7 +66,40 @@ describe('OpenAiImageEditProvider', () => {
     const form = (spy.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
     expect(form.get('model')).toBe('gpt-image-1');
     expect(form.get('quality')).toBe('high');
+    // Without high input fidelity gpt-image-1 reinvents the garden instead of editing the photo.
+    expect(form.get('input_fidelity')).toBe('high');
   });
+
+  it.each(['gpt-image-1', 'gpt-image-1-mini', 'gpt-image-1.5'])(
+    'asks %s for high input fidelity',
+    async (model) => {
+      const spy = stubFetch(jsonResponse({ data: [{ b64_json: PNG_BASE64 }] }));
+      await new OpenAiImageEditProvider('sk-test', { model }).edit({
+        image: sourceImage(),
+        contentType: 'image/png',
+        prompt: 'x',
+      });
+      const form = (spy.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
+      expect(form.get('input_fidelity')).toBe('high');
+    },
+  );
+
+  it.each(['gpt-image-2', 'gpt-image-2-2026-04-21', 'gpt-image-2.5-flare'])(
+    'never sends input_fidelity to %s',
+    async (model) => {
+      // Production returned: 400 invalid_input_fidelity_model — "The model 'gpt-image-2' does not
+      // support the 'input_fidelity' parameter." The gpt-image-2 family is high fidelity by
+      // default, so the parameter is not merely redundant there, it fails the whole request.
+      const spy = stubFetch(jsonResponse({ data: [{ b64_json: PNG_BASE64 }] }));
+      await new OpenAiImageEditProvider('sk-test', { model }).edit({
+        image: sourceImage(),
+        contentType: 'image/png',
+        prompt: 'x',
+      });
+      const form = (spy.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
+      expect(form.get('input_fidelity')).toBeNull();
+    },
+  );
 
   it('falls back to defaults for blank overrides', () => {
     const provider = new OpenAiImageEditProvider('sk-test', { model: '  ', quality: '' });
