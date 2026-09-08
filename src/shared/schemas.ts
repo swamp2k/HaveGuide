@@ -63,3 +63,8 @@ export const identificationRescanSchema = z.object({
   imageId: z.string().min(1),
   organ: z.enum(['auto', 'leaf', 'flower', 'fruit', 'bark', 'habit', 'other']).default('auto'),
 });
+
+export const visualizationCreateSchema = z.object({
+  sourceImageId: z.string().min(1),
+  instruction: z.string().trim().min(3).max(600),
+});

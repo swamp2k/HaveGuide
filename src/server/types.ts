@@ -17,6 +17,9 @@ export type AppBindings = Env & {
   ANTHROPIC_API_KEY?: string;
   PLANTNET_API_KEY?: string;
   PLANTNET_PROJECT?: string;
+  OPENAI_API_KEY?: string;
+  OPENAI_IMAGE_MODEL?: string;
+  OPENAI_IMAGE_QUALITY?: string;
 };
 
 export interface AppVariables {

@@ -74,7 +74,7 @@ toppen. Temaet er rene CSS-variabler på `document.documentElement.dataset.theme
 - Ingen binding mellem fotos og geo-grids.
 - Ingen AR/3D-scanning.
 - Ingen automatisk “gæt jordtype fra foto”.
-- Ingen billedredigering endnu. Anthropic kan analysere billeder, men genererer ikke et redigeret foto. Billedredigering skal have sin egen provider senere.
+- Ingen maskeeditor, penselværktøj eller før/efter-slider på visualiseringer. Ét ønske, ét resultat.
 
 ## Stack
 
@@ -84,6 +84,7 @@ toppen. Temaet er rene CSS-variabler på `document.documentElement.dataset.theme
 - R2 til billeder
 - PlantNet til planteidentifikation
 - Anthropic Messages API til visuel haveanalyse
+- OpenAI Images API til visualisering af ændringer
 - Capacitor kan bruges til Android-shell, men den genererede Android-mappe er ikke committed
 
 ## Cloudflare bindings
@@ -94,9 +95,39 @@ Eksisterende ressourcer genbruges:
 - R2 binding: `MEDIA` (`haveguide`)
 - Secret: `PLANTNET_API_KEY`
 - Secret: `ANTHROPIC_API_KEY`
+- Secret: `OPENAI_API_KEY` (uden den er visualisering slået fra)
 - Text var: `ANTHROPIC_MODEL` (default i `wrangler.jsonc`: `claude-sonnet-5`)
 
 `DATAFORDELER_API_KEY` bruges ikke længere af den nye app og kan fjernes fra Worker-konfigurationen senere, når den gamle løsning er helt udfaset.
+
+## Visualisering
+
+`Se ændringen` redigerer et rigtigt foto af området i stedet for at generere en generisk have.
+Brugeren skriver ét ønske ("flere stauder i det bare hjørne"), og serveren bygger prompten ud fra
+områdets egne forhold og de plantekort, der er slået til. Klienten kan ikke styre prompten ud over
+den fritekst.
+
+Prompten kræver eksplicit, at kameravinkel, perspektiv, lys og alle faste elementer — hus, terrasse,
+hegn, mure, kanter, stier, større sten og eksisterende træer — bevares, og at kun beplantningen
+ændres. Resultatet skal kunne genkendes som præcis denne have.
+
+- Provider: `src/server/providers/image-edit/` bag et lille `ImageEditProvider`-interface, så
+  modellen kan skiftes uden at røre ruter eller UI.
+- Model: `OPENAI_IMAGE_MODEL` (default `gpt-image-2`), kvalitet `OPENAI_IMAGE_QUALITY`
+  (default `medium`). Kaldet bruger `input_fidelity: high`, ellers gendigter modellen haven i
+  stedet for at redigere fotoet.
+- Resultatet gemmes i R2 og serveres kun autentificeret via `/api/visualizations/:id`.
+  R2-nøgler forlader aldrig serveren.
+- Visualiseringer har deres egen tabel (`0012_scene_visualizations.sql`) frem for at genbruge
+  `garden_scene_images_v2`: at udvide dens `kind`-CHECK ville kræve en tabelombygning, og at droppe
+  den gamle tabel med foreign keys slået til udløser `ON DELETE CASCADE` ind i plantekort og
+  analyser.
+
+`imageEditing` i `/api/capabilities` er kun sand, når `OPENAI_API_KEY` er sat. Uden nøglen viser
+UI'et en kort forklaring i stedet for knappen.
+
+**OpenAI kræver, at organisationen er verificeret** for at bruge billedmodellerne. Er den ikke det,
+svarer API'et 403 på hvert kald, og HaveGuide viser "Visualisering er ikke klar endnu."
 
 ## Database
 

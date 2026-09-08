@@ -8,16 +8,21 @@ import {
   identifyPlantSchema,
   sceneCreateSchema,
   sceneUpdateSchema,
+  visualizationCreateSchema,
 } from '../../shared/schemas';
 import type { AppEnvironment } from '../types';
 import { AnthropicGardenProvider } from '../providers/anthropic';
 import { PlantNetProvider } from '../providers/plantnet';
+import { OpenAiImageEditProvider } from '../providers/image-edit/openai';
+import { buildVisualizationPrompt } from '../providers/image-edit/prompt';
+import { ImageEditError } from '../providers/image-edit/types';
 import {
   addImage,
   createScene,
   deleteIdentification,
   deletePlantImage,
   deleteScene,
+  deleteVisualization,
   findIdentification,
   findOwnedImage,
   getProfile,
@@ -29,6 +34,7 @@ import {
   saveAnalysis,
   saveIdentification,
   saveProfile,
+  saveVisualization,
   updateIdentification,
   updateScene,
 } from '../repositories/scenes';
@@ -278,6 +284,110 @@ sceneRoutes.delete('/:sceneId/identifications/:identificationId', async (c) => {
   const result = await deleteIdentification(c.env.DB, sceneId, c.req.param('identificationId'));
   if (!result) return jsonError(c, 404, 'Planten findes ikke.', 'IDENTIFICATION_NOT_FOUND');
   if (result.r2Key) c.executionCtx.waitUntil(c.env.MEDIA.delete(result.r2Key));
+  return c.json({ ok: true });
+});
+
+/**
+ * Generates a "what could this look like" edit of one of the scene's photos.
+ *
+ * The prompt is assembled server-side from the scene's own conditions and opted-in plant cards,
+ * so the client cannot steer the model beyond the free-text wish.
+ */
+sceneRoutes.post('/:sceneId/visualizations', async (c) => {
+  const userId = c.get('user').id;
+  const sceneId = c.req.param('sceneId');
+  if (!(await ownedScene(c.env.DB, userId, sceneId))) {
+    return jsonError(c, 404, 'Området findes ikke.', 'SCENE_NOT_FOUND');
+  }
+  const parsed = visualizationCreateSchema.safeParse(await parseJson<unknown>(c));
+  if (!parsed.success) return jsonError(c, 422, 'Skriv hvad du vil ændre.', 'INVALID_INPUT');
+  if (!c.env.OPENAI_API_KEY) {
+    return jsonError(c, 503, 'Visualisering er ikke klar.', 'IMAGE_EDIT_NOT_CONFIGURED');
+  }
+
+  const image = await findOwnedImage(c.env.DB, userId, parsed.data.sourceImageId);
+  if (!image || image.scene_id !== sceneId || image.kind !== 'scene') {
+    return jsonError(c, 404, 'Fotoet findes ikke.', 'IMAGE_NOT_FOUND');
+  }
+  const object = await c.env.MEDIA.get(image.r2_key);
+  if (!object) return jsonError(c, 404, 'Billedfilen mangler.', 'IMAGE_OBJECT_NOT_FOUND');
+
+  const [profile, identifications] = await Promise.all([
+    getProfile(c.env.DB, sceneId),
+    listIdentifications(c.env.DB, sceneId),
+  ]);
+
+  const provider = new OpenAiImageEditProvider(c.env.OPENAI_API_KEY, {
+    model: c.env.OPENAI_IMAGE_MODEL,
+    quality: c.env.OPENAI_IMAGE_QUALITY,
+  });
+
+  let result: { bytes: ArrayBuffer; contentType: string };
+  try {
+    result = await provider.edit({
+      image: await object.arrayBuffer(),
+      contentType: image.content_type,
+      prompt: buildVisualizationPrompt({
+        instruction: parsed.data.instruction,
+        profile,
+        identifications,
+      }),
+    });
+  } catch (error) {
+    console.error('Image edit failed', error);
+    if (error instanceof ImageEditError) {
+      const status = error.code === 'rejected' ? 422 : error.code === 'rate-limited' ? 429 : 502;
+      const message =
+        error.code === 'rejected'
+          ? 'Ændringen kunne ikke laves. Prøv at beskrive den anderledes.'
+          : error.code === 'not-verified'
+            ? 'Visualisering er ikke klar endnu.'
+            : error.code === 'rate-limited'
+              ? 'Der er travlt lige nu. Prøv igen om lidt.'
+              : 'Visualiseringen fejlede. Prøv igen om lidt.';
+      return jsonError(c, status, message, 'IMAGE_EDIT_FAILED');
+    }
+    return jsonError(c, 502, 'Visualiseringen fejlede. Prøv igen om lidt.', 'IMAGE_EDIT_FAILED');
+  }
+
+  const extension = result.contentType === 'image/jpeg' ? 'jpg' : 'png';
+  const r2Key = `users/${userId}/scenes/${sceneId}/visualizations/${crypto.randomUUID()}.${extension}`;
+  await c.env.MEDIA.put(r2Key, result.bytes, {
+    httpMetadata: { contentType: result.contentType },
+    customMetadata: { kind: 'visualization', sourceImageId: image.id },
+  });
+
+  let id: string;
+  try {
+    id = await saveVisualization(c.env.DB, {
+      sceneId,
+      userId,
+      sourceImageId: image.id,
+      r2Key,
+      contentType: result.contentType,
+      sizeBytes: result.bytes.byteLength,
+      instruction: parsed.data.instruction,
+      model: provider.model,
+    });
+  } catch (error) {
+    // Do not leave an unreferenced object behind if the metadata write fails.
+    c.executionCtx.waitUntil(c.env.MEDIA.delete(r2Key));
+    throw error;
+  }
+
+  const scene = await getScene(c.env.DB, userId, sceneId);
+  return c.json({ visualization: scene?.visualizations.find((item) => item.id === id) ?? null, scene }, 201);
+});
+
+sceneRoutes.delete('/:sceneId/visualizations/:visualizationId', async (c) => {
+  const userId = c.get('user').id;
+  const sceneId = c.req.param('sceneId');
+  if (!(await ownedScene(c.env.DB, userId, sceneId))) {
+    return jsonError(c, 404, 'Området findes ikke.', 'SCENE_NOT_FOUND');
+  }
+  const removed = await deleteVisualization(c.env.DB, sceneId, c.req.param('visualizationId'));
+  if (!removed) return jsonError(c, 404, 'Visualiseringen findes ikke.', 'VISUALIZATION_NOT_FOUND');
+  c.executionCtx.waitUntil(c.env.MEDIA.delete(removed.r2Key));
   return c.json({ ok: true });
 });
 

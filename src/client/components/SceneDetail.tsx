@@ -10,6 +10,7 @@ import { PanoramaBuilder, type PanoramaOutcome } from './PanoramaBuilder';
 import { PhotoModeChoice } from './PhotoModeChoice';
 import { PlantCaptureDialog } from './PlantCaptureDialog';
 import { PlantCardsSection } from './PlantCardsSection';
+import { VisualizationSection } from './VisualizationSection';
 import { ProfileEditor } from './ProfileEditor';
 import { ThemeSelector } from './ThemeSelector';
 import { ChatIcon, EyeIcon, SparkIcon } from './icons';
@@ -190,6 +191,37 @@ export function SceneDetail({
     }
   }
 
+  async function createVisualization(instruction: string) {
+    if (!primaryImage) return;
+    setBusyAction('visualize');
+    setError('');
+    try {
+      const { scene: updated } = await api.createVisualization(scene.id, primaryImage.id, instruction);
+      if (updated) setScene(updated);
+      else await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Visualiseringen fejlede.');
+    } finally {
+      setBusyAction('');
+    }
+  }
+
+  async function removeVisualization(id: string) {
+    setBusyAction('visualize');
+    setError('');
+    try {
+      await api.deleteVisualization(scene.id, id);
+      setScene((current) => ({
+        ...current,
+        visualizations: current.visualizations.filter((item) => item.id !== id),
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Visualiseringen kunne ikke fjernes.');
+    } finally {
+      setBusyAction('');
+    }
+  }
+
   async function analyze(mode: 'overview' | 'ideas' | 'problem') {
     if (!primaryImage) return;
     setBusyAction(mode);
@@ -324,10 +356,17 @@ export function SceneDetail({
           </div>
         )}
 
-        {!capabilities.imageEditing && (
-          <p className="tools-footnote">Ændring af selve fotoet kommer senere.</p>
-        )}
       </section>
+
+      <VisualizationSection
+        visualizations={scene.visualizations}
+        canEdit={capabilities.imageEditing}
+        unavailableReason={capabilities.imageEditingReason}
+        hasPhoto={Boolean(primaryImage)}
+        busy={busyAction === 'visualize'}
+        onCreate={createVisualization}
+        onDelete={removeVisualization}
+      />
 
       <AnalysisSection analyses={scene.analyses} />
 
