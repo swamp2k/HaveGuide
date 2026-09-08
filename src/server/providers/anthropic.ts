@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import type { AiAnalysisPayload, AnalysisMode, AreaProfile, PlantIdentification } from '../../shared/types';
 import { knownPlantsForAnalysis } from '../../shared/plants';
+import { describeProfile } from '../../shared/profile';
+import { filterRedundantFollowUpQuestions } from './follow-up-questions';
 
 const responseSchema = z.object({
   summary: z.string(),
@@ -29,18 +31,6 @@ function extractJson(text: string): unknown {
     if (first >= 0 && last > first) return JSON.parse(trimmed.slice(first, last + 1));
     throw new Error('AI-svaret kunne ikke læses som JSON.');
   }
-}
-
-function profileText(profile: AreaProfile): string {
-  return JSON.stringify({
-    sun: profile.sun,
-    moisture: profile.moisture,
-    soil: profile.soil,
-    drainage: profile.drainage,
-    wind: profile.wind,
-    notes: profile.notes,
-    goals: profile.goals,
-  }, null, 2);
 }
 
 function modeInstruction(mode: AnalysisMode): string {
@@ -85,8 +75,17 @@ Regler:
 Opgave:
 ${modeInstruction(input.mode)}
 
-Områdets forhold:
-${profileText(input.profile)}
+${describeProfile(input.profile)}
+
+Sådan bruger du brugerens oplyste forhold:
+- Spørg IKKE om oplysninger, brugeren allerede har oplyst ovenfor.
+- Behandl udfyldte forhold som kendte brugerdata, ikke som noget du skal bekræfte.
+- Forsøg ikke at genbestemme udfyldte forhold ud fra fotoet.
+- Stil kun opfølgende spørgsmål om felter, der står som "Ikke oplyst" eller "Ved ikke".
+- Hvis Sol, Fugt, Jord og Dræn er udfyldt, må followUpQuestions ikke spørge om dem igen.
+- Hvis Ønsker er udfyldt, må followUpQuestions ikke spørge generelt om, hvad formålet med bedet er.
+- Hvis Noter allerede besvarer et spørgsmål, så stil ikke det spørgsmål igen.
+- Har du ingen reelle huller at spørge om, så returnér en tom followUpQuestions-liste.
 
 Planter brugeren har markeret i området (kan være tom). "label" og "note" er brugerens egne ord om,
 hvor planten står. "commonName"/"scientificName" kommer fra en billedbaseret planteopslagstjeneste
@@ -148,6 +147,10 @@ Returnér KUN valid JSON i præcis denne struktur:
     const body = await response.json() as { content?: Array<{ type?: string; text?: string }> };
     const answer = body.content?.find((item) => item.type === 'text')?.text;
     if (!answer) throw new Error('Anthropic returnerede ikke et tekstsvar.');
-    return responseSchema.parse(extractJson(answer));
+    const payload = responseSchema.parse(extractJson(answer));
+    return {
+      ...payload,
+      followUpQuestions: filterRedundantFollowUpQuestions(payload.followUpQuestions, input.profile),
+    };
   }
 }
