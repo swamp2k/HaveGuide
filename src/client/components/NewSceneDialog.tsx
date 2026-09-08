@@ -26,13 +26,7 @@ export function NewSceneDialog({ onClose, onCreated }: { onClose: () => void; on
     try {
       let image: File | null = null;
       if (files.length > 0) {
-        setStatus(
-          imageMode === 'panorama'
-            ? 'Samler panorama…'
-            : files.length > 1
-              ? 'Samler billeder lodret…'
-              : 'Gør billedet klar…',
-        );
+        setStatus(files.length > 1 ? 'Samler fotos…' : 'Gør fotoet klar…');
         image = await prepareGardenImage(
           files,
           imageMode === 'panorama'
@@ -41,7 +35,7 @@ export function NewSceneDialog({ onClose, onCreated }: { onClose: () => void; on
         );
       }
 
-      setStatus('Opretter område…');
+      setStatus('Opretter…');
       const { scene } = await api.createScene(title);
       createdSceneId = scene.id;
       if (!image) {
@@ -49,7 +43,7 @@ export function NewSceneDialog({ onClose, onCreated }: { onClose: () => void; on
         return;
       }
 
-      setStatus('Uploader billede…');
+      setStatus('Gemmer foto…');
       const uploaded = await api.uploadImage(scene.id, image, 'scene');
       onCreated(uploaded.scene);
     } catch (err) {
@@ -73,15 +67,12 @@ export function NewSceneDialog({ onClose, onCreated }: { onClose: () => void; on
       <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
         <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="new-scene-title">
           <button className="icon-button modal-close" onClick={onClose} disabled={busy} aria-label="Luk">×</button>
-          <p className="eyebrow">Nyt område</p>
-          <h2 id="new-scene-title">Start med et foto</h2>
-          <p className="muted">
-            Tag ét foto, eller brug guidekameraet til et vandret panorama. Hold telefonen lodret — HaveGuide guider dig fra venstre mod højre.
-          </p>
+          <h2 id="new-scene-title">Nyt område</h2>
+          <p className="muted">Tag et foto af stedet, eller vælg et du har.</p>
           <form className="stack" onSubmit={submit}>
             <label>
-              <span>Navn på området</span>
-              <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Fx skråningen ved æbletræet" maxLength={120} required autoFocus />
+              <span>Navn</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Fx skråningen" maxLength={120} required autoFocus />
             </label>
 
             <div className="photo-picker">
@@ -119,9 +110,9 @@ export function NewSceneDialog({ onClose, onCreated }: { onClose: () => void; on
             <p className="picker-help">
               {files.length
                 ? imageMode === 'panorama'
-                  ? `${files.length} billeder taget som panorama — overlap fjernes automatisk ved samling.`
-                  : `${files.length} billede${files.length === 1 ? '' : 'r'} valgt${files.length > 1 ? ' — de samles lodret i den valgte rækkefølge.' : '.'}`
-                : 'Du kan også oprette området uden foto og tilføje det bagefter.'}
+                  ? `${files.length} fotos samles til ét bredt billede.`
+                  : `${files.length} foto${files.length === 1 ? '' : 's'} valgt${files.length > 1 ? ' — de samles til ét billede.' : '.'}`
+                : 'Du kan også tilføje fotoet senere.'}
             </p>
 
             {files.length > 0 && (

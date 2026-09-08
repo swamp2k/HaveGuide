@@ -5,12 +5,32 @@ HaveGuide er genstartet som en foto-først haveassistent. Ingen kort, geofelter 
 ## Produktidé
 
 1. Opret et område og tag/vælg et foto.
-2. Flere fotos kan samles **lodret** i browseren til ét oversigtsfoto.
-3. Angiv sol, fugt, jord og dræn. Vind, mål og noter er valgfrie ekstra oplysninger.
-4. Brug AI til at analysere området eller få forslag, der tager forholdene med i vurderingen.
-5. Tag et separat nærfoto, når en plante skal identificeres med PlantNet.
+2. Angiv sol, fugt, jord og dræn. Vind, ønsker og noter er valgfrie.
+3. Tilføj de planter, der står i bedet, som **plantekort** — ét nærfoto pr. plante.
+4. Bed om et overblik eller idéer. Analysen bruger kun de plantekort, du har slået til.
 
 AI-forslag er låst, indtil sol, fugt, jord og dræn er angivet. Det er bevidst: et flot foto er ikke nok til at vælge planter fornuftigt.
+
+### Fotos
+
+- **Manuelt valg:** vælger du flere fotos, samles de **lodret** til ét oversigtsfoto.
+- **Guidekamera:** optager en serie fra venstre mod højre og samler dem **vandret**, hvor overlappet
+  klippes fra. Det er en enkel sammensætning, ikke rigtig panorama-stitching (ingen feature matching
+  eller perspektivkorrektion). Manuelt foto er den anbefalede vej indtil videre.
+
+### Plantekort
+
+Hvert område har en sektion **Planter i bedet**. Ét plantekort svarer til én fysisk plante og har
+miniature, navnet fra planteopslaget, sikkerhed i procent, et valgfrit kaldenavn ("Den lilla bagest")
+og en valgfri placering ("Ved stenen"). Er det bedste bud forkert, kan man vælge et af de næste bud.
+Hvert kort kan slås fra, så det ikke indgår i AI-analysen, scannes igen med et nyt foto (kaldenavn og
+note bevares) eller fjernes — og fjernes kortet, ryger nærfotoet med, både i D1 og R2.
+
+### Temaer
+
+Fire temaer — Salvie (standard), Rosenhave, Lavendel og Blomstereng — vælges via paletikonet i
+toppen. Temaet er rene CSS-variabler på `document.documentElement.dataset.theme` og gemmes i
+`localStorage` under `haveguide-theme`. Ingen migration, ingen serverstate.
 
 ## Hvad der ikke er med
 
@@ -44,7 +64,7 @@ Eksisterende ressourcer genbruges:
 
 ## Database
 
-Den nye kode bruger `*_v2`-tabeller fra migration `0010_photo_first_rebuild.sql`. Den migration opretter også auth-tabeller med `IF NOT EXISTS`, så:
+Den nye kode bruger `*_v2`-tabeller fra migration `0010_photo_first_rebuild.sql`, udvidet med plantekort-felterne i `0011_plant_cards.sql`. Den migration opretter også auth-tabeller med `IF NOT EXISTS`, så:
 
 - eksisterende brugere/sessions kan fortsætte,
 - gamle have-/geo-tabeller bliver liggende men bruges ikke,

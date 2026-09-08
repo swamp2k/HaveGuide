@@ -40,7 +40,13 @@ export interface PlantIdentification {
   imageId: string;
   organ: PlantOrgan;
   createdAt: string;
+  updatedAt: string | null;
   suggestions: PlantSuggestion[];
+  selectedSuggestionIndex: number;
+  nickname: string;
+  note: string;
+  includeInAnalysis: boolean;
+  image: SceneImage | null;
 }
 
 export interface AiAnalysisPayload {

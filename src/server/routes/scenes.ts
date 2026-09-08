@@ -3,6 +3,8 @@ import { isProfileComplete } from '../../shared/profile';
 import {
   analyzeSceneSchema,
   areaProfileSchema,
+  identificationRescanSchema,
+  identificationUpdateSchema,
   identifyPlantSchema,
   sceneCreateSchema,
   sceneUpdateSchema,
@@ -13,16 +15,21 @@ import { PlantNetProvider } from '../providers/plantnet';
 import {
   addImage,
   createScene,
+  deleteIdentification,
+  deletePlantImage,
   deleteScene,
+  findIdentification,
   findOwnedImage,
   getProfile,
   getScene,
   listIdentifications,
   listScenes,
   ownedScene,
+  replaceIdentificationScan,
   saveAnalysis,
   saveIdentification,
   saveProfile,
+  updateIdentification,
   updateScene,
 } from '../repositories/scenes';
 import { requireAuth } from '../middleware/auth';
@@ -124,8 +131,12 @@ sceneRoutes.post('/:sceneId/identify', async (c) => {
       filename: image.original_filename,
       organ: parsed.data.organ,
     });
-    const id = await saveIdentification(c.env.DB, sceneId, image.id, parsed.data.organ, suggestions);
-    return c.json({ id, suggestions });
+    const id = await saveIdentification(c.env.DB, sceneId, image.id, parsed.data.organ, suggestions, {
+      nickname: parsed.data.nickname,
+      note: parsed.data.note,
+    });
+    const identification = await findIdentification(c.env.DB, sceneId, id);
+    return c.json({ id, suggestions, identification });
   } catch (error) {
     console.error('PlantNet identify failed', error);
     return jsonError(c, 502, 'PlantNet kunne ikke analysere billedet lige nu.', 'PLANTNET_FAILED');
@@ -153,7 +164,7 @@ sceneRoutes.post('/:sceneId/analyze', async (c) => {
     return jsonError(
       c,
       422,
-      'Angiv mindst sol, fugt, jord og dræn før du beder om plante- eller ændringsforslag.',
+      'Vælg sol, fugt, jord og dræn først.',
       'PROFILE_REQUIRED',
     );
   }
@@ -193,6 +204,81 @@ sceneRoutes.post('/:sceneId/analyze', async (c) => {
     console.error('Anthropic analysis failed', error);
     return jsonError(c, 502, 'AI-analysen fejlede. Prøv igen om lidt.', 'AI_ANALYSIS_FAILED');
   }
+});
+
+sceneRoutes.patch('/:sceneId/identifications/:identificationId', async (c) => {
+  const userId = c.get('user').id;
+  const sceneId = c.req.param('sceneId');
+  if (!(await ownedScene(c.env.DB, userId, sceneId))) {
+    return jsonError(c, 404, 'Området findes ikke.', 'SCENE_NOT_FOUND');
+  }
+  const parsed = identificationUpdateSchema.safeParse(await parseJson<unknown>(c));
+  if (!parsed.success) return jsonError(c, 422, 'Ændringen er ikke gyldig.', 'INVALID_INPUT');
+
+  const identification = await updateIdentification(
+    c.env.DB,
+    sceneId,
+    c.req.param('identificationId'),
+    parsed.data,
+  );
+  if (!identification) return jsonError(c, 404, 'Planten findes ikke.', 'IDENTIFICATION_NOT_FOUND');
+  return c.json({ identification });
+});
+
+sceneRoutes.post('/:sceneId/identifications/:identificationId/rescan', async (c) => {
+  const userId = c.get('user').id;
+  const sceneId = c.req.param('sceneId');
+  const identificationId = c.req.param('identificationId');
+  if (!(await ownedScene(c.env.DB, userId, sceneId))) {
+    return jsonError(c, 404, 'Området findes ikke.', 'SCENE_NOT_FOUND');
+  }
+  const parsed = identificationRescanSchema.safeParse(await parseJson<unknown>(c));
+  if (!parsed.success) return jsonError(c, 422, 'Vælg et plantefoto.', 'INVALID_INPUT');
+  if (!c.env.PLANTNET_API_KEY) return jsonError(c, 503, 'Planteopslag er ikke klar.', 'PLANTNET_NOT_CONFIGURED');
+
+  const existing = await findIdentification(c.env.DB, sceneId, identificationId);
+  if (!existing) return jsonError(c, 404, 'Planten findes ikke.', 'IDENTIFICATION_NOT_FOUND');
+
+  const image = await findOwnedImage(c.env.DB, userId, parsed.data.imageId);
+  if (!image || image.scene_id !== sceneId || image.kind !== 'plant') {
+    return jsonError(c, 404, 'Billedet findes ikke.', 'IMAGE_NOT_FOUND');
+  }
+  const object = await c.env.MEDIA.get(image.r2_key);
+  if (!object) return jsonError(c, 404, 'Billedfilen mangler.', 'IMAGE_OBJECT_NOT_FOUND');
+
+  try {
+    const suggestions = await new PlantNetProvider(c.env.PLANTNET_API_KEY, c.env.PLANTNET_PROJECT || 'all').identify({
+      blob: await object.blob(),
+      filename: image.original_filename,
+      organ: parsed.data.organ,
+    });
+    const { identification, previousImageId } = await replaceIdentificationScan(c.env.DB, sceneId, identificationId, {
+      imageId: image.id,
+      organ: parsed.data.organ,
+      suggestions,
+    });
+    if (!identification) return jsonError(c, 404, 'Planten findes ikke.', 'IDENTIFICATION_NOT_FOUND');
+    if (previousImageId && previousImageId !== image.id) {
+      const staleKey = await deletePlantImage(c.env.DB, sceneId, previousImageId);
+      if (staleKey) c.executionCtx.waitUntil(c.env.MEDIA.delete(staleKey));
+    }
+    return c.json({ identification });
+  } catch (error) {
+    console.error('PlantNet rescan failed', error);
+    return jsonError(c, 502, 'Planten kunne ikke slås op lige nu.', 'PLANTNET_FAILED');
+  }
+});
+
+sceneRoutes.delete('/:sceneId/identifications/:identificationId', async (c) => {
+  const userId = c.get('user').id;
+  const sceneId = c.req.param('sceneId');
+  if (!(await ownedScene(c.env.DB, userId, sceneId))) {
+    return jsonError(c, 404, 'Området findes ikke.', 'SCENE_NOT_FOUND');
+  }
+  const result = await deleteIdentification(c.env.DB, sceneId, c.req.param('identificationId'));
+  if (!result) return jsonError(c, 404, 'Planten findes ikke.', 'IDENTIFICATION_NOT_FOUND');
+  if (result.r2Key) c.executionCtx.waitUntil(c.env.MEDIA.delete(result.r2Key));
+  return c.json({ ok: true });
 });
 
 sceneRoutes.delete('/:sceneId', async (c) => {
