@@ -44,24 +44,31 @@ function describeFailure(status: number, body: string): ImageEditError {
   const detail = parsed?.error?.message ?? '';
   const code = parsed?.error?.code ?? '';
 
+  // The upstream text is kept on every branch: this message is only ever logged server-side
+  // (routes pick the user-facing wording from `code`), and without it a 429 for "no credit"
+  // is indistinguishable from a 429 for "too many requests".
+  const suffix = ` [${status}${code ? ` ${code}` : ''}${detail ? `: ${detail.slice(0, 300)}` : ''}]`;
+
   if (status === 403 && /verif/i.test(`${detail} ${code}`)) {
     return new ImageEditError(
-      'OpenAI-organisationen er ikke verificeret til billedmodellen.',
+      `OpenAI-organisationen er ikke verificeret til billedmodellen.${suffix}`,
       'not-verified',
       status,
     );
   }
   if (status === 400 && /safety|moderation|content policy|rejected/i.test(`${detail} ${code}`)) {
-    return new ImageEditError('Forespørgslen blev afvist af billedmodellen.', 'rejected', status);
+    return new ImageEditError(`Forespørgslen blev afvist af billedmodellen.${suffix}`, 'rejected', status);
   }
   if (status === 429) {
-    return new ImageEditError('Billedmodellen er optaget lige nu.', 'rate-limited', status);
+    // OpenAI also answers 429 when the account is out of credit, which is not a retry situation.
+    const outOfCredit = /insufficient_quota|billing|exceeded your current quota/i.test(`${detail} ${code}`);
+    return new ImageEditError(
+      `${outOfCredit ? 'OpenAI-kontoen har ikke mere kvote.' : 'Billedmodellen er optaget lige nu.'}${suffix}`,
+      outOfCredit ? 'no-credit' : 'rate-limited',
+      status,
+    );
   }
-  return new ImageEditError(
-    `Billedmodellen svarede med status ${status}${detail ? `: ${detail.slice(0, 200)}` : ''}`,
-    'provider-error',
-    status,
-  );
+  return new ImageEditError(`Billedmodellen svarede med en fejl.${suffix}`, 'provider-error', status);
 }
 
 export class OpenAiImageEditProvider implements ImageEditProvider {

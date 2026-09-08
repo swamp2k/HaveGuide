@@ -27,6 +27,7 @@ export class ImageEditError extends Error {
       | 'rejected'
       | 'not-verified'
       | 'rate-limited'
+      | 'no-credit'
       | 'provider-error',
     readonly status?: number,
   ) {

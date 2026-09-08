@@ -340,7 +340,7 @@ sceneRoutes.post('/:sceneId/visualizations', async (c) => {
       const message =
         error.code === 'rejected'
           ? 'Ændringen kunne ikke laves. Prøv at beskrive den anderledes.'
-          : error.code === 'not-verified'
+          : error.code === 'not-verified' || error.code === 'no-credit'
             ? 'Visualisering er ikke klar endnu.'
             : error.code === 'rate-limited'
               ? 'Der er travlt lige nu. Prøv igen om lidt.'

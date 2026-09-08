@@ -102,10 +102,34 @@ describe('OpenAiImageEditProvider', () => {
   });
 
   it('maps rate limiting', async () => {
-    stubFetch(jsonResponse({ error: { message: 'slow down' } }, 429));
+    stubFetch(jsonResponse({ error: { message: 'Rate limit reached for images' } }, 429));
     const provider = new OpenAiImageEditProvider('sk-test');
     await expect(provider.edit({ image: sourceImage(), contentType: 'image/jpeg', prompt: 'x' }))
       .rejects.toMatchObject({ code: 'rate-limited' });
+  });
+
+  it('separates an out-of-credit 429 from real rate limiting', async () => {
+    // OpenAI answers 429 for both; only one of them is worth retrying.
+    stubFetch(
+      jsonResponse(
+        { error: { code: 'insufficient_quota', message: 'You exceeded your current quota.' } },
+        429,
+      ),
+    );
+    const provider = new OpenAiImageEditProvider('sk-test');
+    await expect(provider.edit({ image: sourceImage(), contentType: 'image/jpeg', prompt: 'x' }))
+      .rejects.toMatchObject({ code: 'no-credit' });
+  });
+
+  it('keeps the upstream detail on the error so logs stay diagnosable', async () => {
+    stubFetch(
+      jsonResponse({ error: { code: 'insufficient_quota', message: 'You exceeded your current quota.' } }, 429),
+    );
+    const provider = new OpenAiImageEditProvider('sk-test');
+    await expect(provider.edit({ image: sourceImage(), contentType: 'image/jpeg', prompt: 'x' }))
+      .rejects.toSatisfy((error: Error) =>
+        error.message.includes('insufficient_quota') && error.message.includes('429'),
+      );
   });
 
   it('fails clearly when the response carries no image', async () => {
