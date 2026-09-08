@@ -21,6 +21,20 @@ function base64ToBytes(value: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+/**
+ * `input_fidelity: high` is what stops gpt-image-1 reinventing the garden instead of editing the
+ * photo, so it is not optional there. gpt-image-2 removed the parameter — it processes every input
+ * at high fidelity unconditionally — and rejects the request outright if it is sent:
+ *
+ *   400 invalid_input_fidelity_model: The model 'gpt-image-2' does not support the
+ *   'input_fidelity' parameter.
+ *
+ * Sending it only to the models that still take it keeps the photo recognisable on both.
+ */
+function supportsInputFidelity(model: string): boolean {
+  return /^gpt-image-1(\b|[.-])/.test(model);
+}
+
 function extensionFor(contentType: string): string {
   if (contentType === 'image/png') return 'png';
   if (contentType === 'image/webp') return 'webp';
@@ -104,7 +118,7 @@ export class OpenAiImageEditProvider implements ImageEditProvider {
     form.append('n', '1');
     form.append('quality', this.quality);
     // Keep the real photo recognisable rather than reimagining the garden from scratch.
-    form.append('input_fidelity', 'high');
+    if (supportsInputFidelity(this.model)) form.append('input_fidelity', 'high');
 
     let response: Response;
     try {
