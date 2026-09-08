@@ -1,9 +1,15 @@
 import { useMemo, useRef, useState } from 'react';
-import type { AreaProfile, GardenScene } from '../../shared/types';
+import type { AreaProfile, GardenScene, PlantIdentification, PlantOrgan } from '../../shared/types';
 import { isProfileComplete } from '../../shared/profile';
 import { api } from '../api';
 import { prepareGardenImage } from '../image-tools';
+import type { ThemeId } from '../theme';
+import { AnalysisSection } from './AnalysisSection';
+import { PlantCaptureDialog } from './PlantCaptureDialog';
+import { PlantCardsSection } from './PlantCardsSection';
 import { ProfileEditor } from './ProfileEditor';
+import { ThemeSelector } from './ThemeSelector';
+import { ChatIcon, EyeIcon, SparkIcon } from './icons';
 
 interface Capabilities {
   plantIdentification: boolean;
@@ -12,46 +18,45 @@ interface Capabilities {
   imageEditingReason: string;
 }
 
-function AnalysisCard({ analysis }: { analysis: GardenScene['analyses'][number] }) {
-  const modeLabel = { overview: 'Analyse', ideas: 'Forslag', problem: 'Problemhjælp' }[analysis.mode];
-  return (
-    <article className="result-card">
-      <div className="result-meta"><span>{modeLabel}</span><time>{new Date(analysis.createdAt).toLocaleString('da-DK')}</time></div>
-      <h3>{analysis.payload.summary}</h3>
-      {analysis.payload.observations.length > 0 && <div><h4>Det jeg ser</h4><ul>{analysis.payload.observations.map((item) => <li key={item}>{item}</li>)}</ul></div>}
-      {analysis.payload.recommendations.length > 0 && <div><h4>Forslag</h4><ul>{analysis.payload.recommendations.map((item) => <li key={item}>{item}</li>)}</ul></div>}
-      {analysis.payload.cautions.length > 0 && <div><h4>Vær opmærksom på</h4><ul>{analysis.payload.cautions.map((item) => <li key={item}>{item}</li>)}</ul></div>}
-      {analysis.payload.followUpQuestions.length > 0 && <div><h4>Hvis vi skal længere</h4><ul>{analysis.payload.followUpQuestions.map((item) => <li key={item}>{item}</li>)}</ul></div>}
-    </article>
-  );
-}
-
 export function SceneDetail({
   initialScene,
   capabilities,
+  theme,
+  onThemeChange,
   onBack,
   onDeleted,
 }: {
   initialScene: GardenScene;
   capabilities: Capabilities;
+  theme: ThemeId;
+  onThemeChange: (theme: ThemeId) => void;
   onBack: () => void;
   onDeleted: () => void;
 }) {
   const [scene, setScene] = useState(initialScene);
   const [busyAction, setBusyAction] = useState('');
+  const [busyPlantId, setBusyPlantId] = useState('');
   const [error, setError] = useState('');
   const [question, setQuestion] = useState('');
-  const [organ, setOrgan] = useState('auto');
+  const [askOpen, setAskOpen] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
   const sceneFileRef = useRef<HTMLInputElement>(null);
-  const plantFileRef = useRef<HTMLInputElement>(null);
 
   const sceneImages = useMemo(() => scene.images.filter((image) => image.kind === 'scene'), [scene.images]);
   const primaryImage = sceneImages[0] ?? null;
   const profileComplete = isProfileComplete(scene.profile);
+  const busy = Boolean(busyAction);
 
   async function refresh() {
     const { scene: updated } = await api.getScene(scene.id);
     setScene(updated);
+  }
+
+  function mergeIdentification(identification: PlantIdentification) {
+    setScene((current) => ({
+      ...current,
+      identifications: current.identifications.map((item) => (item.id === identification.id ? identification : item)),
+    }));
   }
 
   async function saveProfile(profile: AreaProfile) {
@@ -68,27 +73,73 @@ export function SceneDetail({
       const { scene: updated } = await api.uploadImage(scene.id, prepared, 'scene');
       setScene(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kunne ikke uploade billedet.');
+      setError(err instanceof Error ? err.message : 'Kunne ikke gemme fotoet.');
     } finally {
       setBusyAction('');
       if (sceneFileRef.current) sceneFileRef.current.value = '';
     }
   }
 
-  async function identifyPlant(file: File | undefined) {
-    if (!file) return;
-    setBusyAction('identify');
+  async function identifyPlant(file: File, organ: PlantOrgan): Promise<PlantIdentification> {
+    const prepared = await prepareGardenImage([file]);
+    const uploaded = await api.uploadImage(scene.id, prepared, 'plant');
+    const { identification } = await api.identify(scene.id, uploaded.imageId, organ);
+    if (!identification) throw new Error('Planten kunne ikke gemmes.');
+    setScene((current) => ({ ...current, identifications: [identification, ...current.identifications] }));
+    return identification;
+  }
+
+  async function patchPlant(
+    id: string,
+    patch: { nickname?: string; note?: string; includeInAnalysis?: boolean; selectedSuggestionIndex?: number },
+  ) {
+    setBusyPlantId(id);
     setError('');
     try {
+      const { identification } = await api.updateIdentification(scene.id, id, patch);
+      mergeIdentification(identification);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ændringen blev ikke gemt.');
+    } finally {
+      setBusyPlantId('');
+    }
+  }
+
+  async function rescanPlant(id: string, file: File) {
+    setBusyPlantId(id);
+    setError('');
+    try {
+      const existing = scene.identifications.find((item) => item.id === id);
       const prepared = await prepareGardenImage([file]);
       const uploaded = await api.uploadImage(scene.id, prepared, 'plant');
-      await api.identify(scene.id, uploaded.imageId, organ);
-      await refresh();
+      const { identification } = await api.rescanIdentification(
+        scene.id,
+        id,
+        uploaded.imageId,
+        existing?.organ ?? 'auto',
+      );
+      mergeIdentification(identification);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Plantegenkendelsen fejlede.');
+      setError(err instanceof Error ? err.message : 'Planten kunne ikke scannes igen.');
+      await refresh().catch(() => undefined);
     } finally {
-      setBusyAction('');
-      if (plantFileRef.current) plantFileRef.current.value = '';
+      setBusyPlantId('');
+    }
+  }
+
+  async function removePlant(id: string) {
+    setBusyPlantId(id);
+    setError('');
+    try {
+      await api.deleteIdentification(scene.id, id);
+      setScene((current) => ({
+        ...current,
+        identifications: current.identifications.filter((item) => item.id !== id),
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Planten kunne ikke fjernes.');
+    } finally {
+      setBusyPlantId('');
     }
   }
 
@@ -99,22 +150,23 @@ export function SceneDetail({
     try {
       await api.analyze(scene.id, primaryImage.id, mode, mode === 'problem' ? question : '');
       await refresh();
+      if (mode === 'problem') { setQuestion(''); setAskOpen(false); }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Analysen fejlede.');
+      setError(err instanceof Error ? err.message : 'Det virkede ikke lige nu.');
     } finally {
       setBusyAction('');
     }
   }
 
   async function remove() {
-    if (!window.confirm(`Slet "${scene.title}" og alle billeder/analyser knyttet til området?`)) return;
+    if (!window.confirm(`Slet "${scene.title}" med fotos og svar?`)) return;
     setBusyAction('delete');
     setError('');
     try {
       await api.deleteScene(scene.id);
       onDeleted();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kunne ikke slette området.');
+      setError(err instanceof Error ? err.message : 'Området kunne ikke slettes.');
       setBusyAction('');
     }
   }
@@ -122,90 +174,127 @@ export function SceneDetail({
   return (
     <main className="app-page detail-page">
       <header className="topbar detail-topbar">
-        <button className="back-button" onClick={onBack}>← Områder</button>
+        <button className="back-button" onClick={onBack}>← Have</button>
         <div className="topbar-actions">
-          <button className="danger-quiet" onClick={remove} disabled={Boolean(busyAction)}>{busyAction === 'delete' ? 'Sletter…' : 'Slet'}</button>
+          <ThemeSelector theme={theme} onChange={onThemeChange} />
+          <button className="danger-quiet compact" onClick={remove} disabled={busy}>
+            {busyAction === 'delete' ? 'Sletter…' : 'Slet'}
+          </button>
         </div>
       </header>
 
-      <section className="detail-hero">
-        <div>
-          <p className="eyebrow">Haveområde</p>
+      <section className="scene-stage">
+        {primaryImage ? (
+          <img src={primaryImage.url} alt={scene.title} />
+        ) : (
+          <div className="scene-stage-empty"><span>Intet foto endnu</span></div>
+        )}
+        <div className="scene-stage-overlay">
           <h1>{scene.title}</h1>
-          {scene.notes && <p className="muted">{scene.notes}</p>}
+          <label className="ghost-button file-button">
+            <input
+              ref={sceneFileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) => uploadScenePhotos(Array.from(event.target.files ?? []).slice(0, 6))}
+            />
+            {busyAction === 'photo' ? 'Arbejder…' : primaryImage ? 'Nyt foto' : 'Tilføj foto'}
+          </label>
         </div>
-        <label className="secondary file-button">
-          <input ref={sceneFileRef} type="file" accept="image/*" multiple onChange={(event) => uploadScenePhotos(Array.from(event.target.files ?? []).slice(0, 6))} />
-          {busyAction === 'photo' ? 'Behandler…' : primaryImage ? 'Nyt / stitch foto' : 'Tilføj / stitch foto'}
-        </label>
       </section>
 
-      {primaryImage ? (
-        <section className="photo-stage">
-          <img src={primaryImage.url} alt={`Oversigtsfoto af ${scene.title}`} />
-          {sceneImages.length > 1 && <span className="photo-count">{sceneImages.length} oversigtsfotos</span>}
-        </section>
-      ) : (
-        <section className="empty-photo"><strong>Intet oversigtsfoto endnu</strong><span>Tilføj ét billede eller flere, der skal stitches lodret.</span></section>
-      )}
-
+      {scene.notes && <p className="scene-notes">{scene.notes}</p>}
       {error && <p className="error-box wide-error">{error}</p>}
 
-      <div className="detail-grid">
-        <ProfileEditor profile={scene.profile} onSave={saveProfile} />
+      <ProfileEditor profile={scene.profile} onSave={saveProfile} />
 
-        <section className="panel action-panel">
-          <div className="section-heading">
-            <div><p className="eyebrow">Værktøjer</p><h2>Hvad skal vi gøre?</h2></div>
-          </div>
-          <div className="action-list">
-            <button className="action-card" onClick={() => analyze('overview')} disabled={!primaryImage || !capabilities.aiAnalysis || Boolean(busyAction)}>
-              <span className="action-icon">◎</span><span><strong>Analysér området</strong><small>Hvad ses på fotoet, hvad er usikkert, og hvad bør du lægge mærke til?</small></span><b>{busyAction === 'overview' ? '…' : '›'}</b>
-            </button>
-            <button className="action-card" onClick={() => analyze('ideas')} disabled={!primaryImage || !profileComplete || !capabilities.aiAnalysis || Boolean(busyAction)}>
-              <span className="action-icon">✦</span><span><strong>Få forslag</strong><small>{profileComplete ? 'Konkrete ændringer og planter til netop forholdene.' : 'Angiv sol, fugt, jord og dræn først.'}</small></span><b>{busyAction === 'ideas' ? '…' : '›'}</b>
-            </button>
-            <label className={`action-card ${!capabilities.plantIdentification || Boolean(busyAction) ? 'disabled' : ''}`}>
-              <input ref={plantFileRef} type="file" accept="image/*" capture="environment" disabled={!capabilities.plantIdentification || Boolean(busyAction)} onChange={(event) => identifyPlant(event.target.files?.[0])} />
-              <span className="action-icon">⌕</span><span><strong>Genkend en plante</strong><small>Tag et nærfoto. PlantNet er langt bedre til nærbilleder end brede havefotos.</small></span><b>{busyAction === 'identify' ? '…' : '›'}</b>
-            </label>
-            <div className="organ-row">
-              <span>På plantefotoet:</span>
-              <select value={organ} onChange={(event) => setOrgan(event.target.value)}>
-                <option value="auto">Auto</option><option value="flower">Blomst</option><option value="leaf">Blad</option><option value="fruit">Frugt</option><option value="bark">Bark</option><option value="habit">Hel plante</option>
-              </select>
-            </div>
-            <button className="action-card" disabled title={capabilities.imageEditingReason}>
-              <span className="action-icon">▧</span><span><strong>Visualisér ændring</strong><small>Kommer når vi kobler en rigtig billedmodel på. Anthropic kan analysere fotoet, men ikke redigere det.</small></span><span className="soon-badge">Senere</span>
-            </button>
-          </div>
+      <PlantCardsSection
+        identifications={scene.identifications}
+        busyId={busyPlantId}
+        canIdentify={capabilities.plantIdentification && !busy}
+        onAdd={() => setCaptureOpen(true)}
+        handlers={{ onPatch: patchPlant, onRescan: rescanPlant, onRemove: removePlant }}
+      />
 
-          <div className="problem-box">
-            <label><span>Har du et konkret problem?</span><textarea value={question} onChange={(event) => setQuestion(event.target.value)} rows={3} placeholder="Fx hvorfor mistrives planterne i højre side, eller hvad kan jeg gøre ved det bare område?" /></label>
-            <button className="secondary" disabled={!primaryImage || !question.trim() || !capabilities.aiAnalysis || Boolean(busyAction)} onClick={() => analyze('problem')}>{busyAction === 'problem' ? 'Analyserer…' : 'Undersøg problemet'}</button>
-          </div>
-        </section>
-      </div>
+      <section className="panel tools-panel">
+        <div className="section-heading"><h2>Spørg haven</h2></div>
+        <div className="tool-grid">
+          <button
+            className="tool-card"
+            onClick={() => analyze('overview')}
+            disabled={!primaryImage || !capabilities.aiAnalysis || busy}
+          >
+            <span className="tool-icon"><EyeIcon /></span>
+            <strong>Se på området</strong>
+            <small>{busyAction === 'overview' ? 'Kigger…' : 'Se hvad der vokser og trives her.'}</small>
+          </button>
+          <button
+            className="tool-card"
+            onClick={() => analyze('ideas')}
+            disabled={!primaryImage || !profileComplete || !capabilities.aiAnalysis || busy}
+          >
+            <span className="tool-icon"><SparkIcon /></span>
+            <strong>Få idéer</strong>
+            <small>
+              {busyAction === 'ideas'
+                ? 'Tænker…'
+                : profileComplete
+                  ? 'Få idéer til netop dette sted.'
+                  : 'Vælg sol, fugt, jord og dræn først.'}
+            </small>
+          </button>
+          <button
+            className="tool-card"
+            onClick={() => setAskOpen((value) => !value)}
+            disabled={!primaryImage || !capabilities.aiAnalysis || busy}
+          >
+            <span className="tool-icon"><ChatIcon /></span>
+            <strong>Spørg om noget</strong>
+            <small>Skriv hvad du undrer dig over.</small>
+          </button>
+        </div>
 
-      <section className="results-section">
-        <div className="section-heading"><div><p className="eyebrow">Historik</p><h2>Det vi har fundet</h2></div></div>
-        {scene.identifications.length > 0 && (
-          <div className="plant-results">
-            {scene.identifications.map((identification) => (
-              <article className="plant-result" key={identification.id}>
-                <div><span className="result-label">PlantNet</span><time>{new Date(identification.createdAt).toLocaleString('da-DK')}</time></div>
-                {identification.suggestions.length ? identification.suggestions.slice(0, 3).map((suggestion, index) => (
-                  <p key={`${suggestion.scientificName}-${index}`}><strong>{index === 0 ? 'Bedste bud: ' : ''}{suggestion.commonName || suggestion.scientificName}</strong><span>{suggestion.scientificName} · {Math.round(suggestion.score * 100)}%</span></p>
-                )) : <p>Ingen sikre forslag fundet.</p>}
-              </article>
-            ))}
+        {askOpen && (
+          <div className="ask-box">
+            <textarea
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              rows={3}
+              placeholder="Fx hvorfor mistrives planterne i højre side?"
+              autoFocus
+            />
+            <button
+              className="primary"
+              disabled={!primaryImage || !question.trim() || busy}
+              onClick={() => analyze('problem')}
+            >
+              {busyAction === 'problem' ? 'Tænker…' : 'Spørg'}
+            </button>
           </div>
         )}
-        <div className="analysis-results">
-          {scene.analyses.map((analysis) => <AnalysisCard key={analysis.id} analysis={analysis} />)}
-        </div>
-        {scene.identifications.length === 0 && scene.analyses.length === 0 && <div className="empty-results"><strong>Ingen analyser endnu</strong><span>Start med “Analysér området” eller tag et nærfoto af en plante.</span></div>}
+
+        {!capabilities.imageEditing && (
+          <p className="tools-footnote">Ændring af selve fotoet kommer senere.</p>
+        )}
       </section>
+
+      <AnalysisSection analyses={scene.analyses} />
+
+      {scene.analyses.length === 0 && (
+        <div className="empty-results">
+          <strong>Ingen svar endnu</strong>
+          <span>Start med “Se på området”.</span>
+        </div>
+      )}
+
+      {captureOpen && (
+        <PlantCaptureDialog
+          onClose={() => setCaptureOpen(false)}
+          onIdentify={identifyPlant}
+          onSaveLabels={(id, patch) => patchPlant(id, patch)}
+        />
+      )}
     </main>
   );
 }

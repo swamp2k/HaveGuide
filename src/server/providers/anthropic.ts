@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AiAnalysisPayload, AnalysisMode, AreaProfile, PlantIdentification } from '../../shared/types';
+import { knownPlantsForAnalysis } from '../../shared/plants';
 
 const responseSchema = z.object({
   summary: z.string(),
@@ -68,15 +69,7 @@ export class AnthropicGardenProvider {
       throw new Error('Billedformatet kan ikke analyseres af AI. Brug JPEG, PNG eller WebP.');
     }
 
-    const knownPlants = input.identifications
-      .slice(0, 5)
-      .map((item) => item.suggestions[0])
-      .filter(Boolean)
-      .map((item) => ({
-        commonName: item.commonName,
-        scientificName: item.scientificName,
-        confidence: item.score,
-      }));
+    const knownPlants = knownPlantsForAnalysis(input.identifications);
 
     const prompt = `Du er HaveGuide, en dansk haveassistent. Du analyserer ét konkret foto af et haveområde.
 
@@ -95,8 +88,16 @@ ${modeInstruction(input.mode)}
 Områdets forhold:
 ${profileText(input.profile)}
 
-PlantNet-resultater knyttet til området (kan være tomme og kan være forkerte):
+Planter brugeren har markeret i området (kan være tom). "label" og "note" er brugerens egne ord om,
+hvor planten står. "commonName"/"scientificName" kommer fra en billedbaseret planteopslagstjeneste
+(PlantNet) og kan være forkerte — især ved lav confidence:
 ${JSON.stringify(knownPlants, null, 2)}
+
+Om de markerede planter:
+- Behandl dem som brugerens kontekst, ikke som facit.
+- Hold dem adskilt fra det, du selv kan se på oversigtsfotoet.
+- Ved confidence under ca. 0,5 skal du omtale arten som usikker eller lade den ligge.
+- Brug brugerens label/note, når du henviser til en bestemt plante, så hun kan genkende den.
 
 Brugerens ekstra spørgsmål:
 ${input.question || '(intet)'}

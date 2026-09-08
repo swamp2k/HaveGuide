@@ -1,4 +1,4 @@
-import type { AreaProfile, GardenScene, SceneSummary } from '../shared/types';
+import type { AreaProfile, GardenScene, PlantIdentification, SceneSummary } from '../shared/types';
 import type { PasswordChallenge } from '../shared/auth';
 
 interface ApiErrorBody { error?: { message?: string; code?: string; details?: unknown } }
@@ -39,7 +39,27 @@ export const api = {
     form.append('kind', kind);
     return request<{ scene: GardenScene; imageId: string }>(`/api/scenes/${id}/images`, { method: 'POST', body: form });
   },
-  identify: (sceneId: string, imageId: string, organ: string) => request<{ id: string; suggestions: Array<{ scientificName: string; commonName: string; score: number; gbifId: string | null }> }>(`/api/scenes/${sceneId}/identify`, { method: 'POST', body: JSON.stringify({ imageId, organ }) }),
+  identify: (sceneId: string, imageId: string, organ: string, meta: { nickname?: string; note?: string } = {}) =>
+    request<{ id: string; suggestions: PlantIdentification['suggestions']; identification: PlantIdentification | null }>(
+      `/api/scenes/${sceneId}/identify`,
+      { method: 'POST', body: JSON.stringify({ imageId, organ, ...meta }) },
+    ),
+  updateIdentification: (
+    sceneId: string,
+    identificationId: string,
+    patch: { nickname?: string; note?: string; includeInAnalysis?: boolean; selectedSuggestionIndex?: number },
+  ) =>
+    request<{ identification: PlantIdentification }>(
+      `/api/scenes/${sceneId}/identifications/${identificationId}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    ),
+  rescanIdentification: (sceneId: string, identificationId: string, imageId: string, organ: string) =>
+    request<{ identification: PlantIdentification }>(
+      `/api/scenes/${sceneId}/identifications/${identificationId}/rescan`,
+      { method: 'POST', body: JSON.stringify({ imageId, organ }) },
+    ),
+  deleteIdentification: (sceneId: string, identificationId: string) =>
+    request<{ ok: boolean }>(`/api/scenes/${sceneId}/identifications/${identificationId}`, { method: 'DELETE' }),
   analyze: (sceneId: string, imageId: string, mode: 'overview' | 'ideas' | 'problem', question = '') => request<{ analysis: GardenScene['analyses'][number] }>(`/api/scenes/${sceneId}/analyze`, { method: 'POST', body: JSON.stringify({ imageId, mode, question }) }),
   deleteScene: (id: string) => request<{ ok: boolean }>(`/api/scenes/${id}`, { method: 'DELETE' }),
 };

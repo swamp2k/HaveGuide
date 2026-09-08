@@ -38,10 +38,28 @@ export const areaProfileSchema = z.object({
 export const identifyPlantSchema = z.object({
   imageId: z.string().min(1),
   organ: z.enum(['auto', 'leaf', 'flower', 'fruit', 'bark', 'habit', 'other']).default('auto'),
+  nickname: z.string().trim().max(60).optional(),
+  note: z.string().trim().max(240).optional(),
 });
 
 export const analyzeSceneSchema = z.object({
   imageId: z.string().min(1),
   mode: z.enum(['overview', 'ideas', 'problem']),
   question: z.string().trim().max(1200).optional().default(''),
+});
+
+export const identificationUpdateSchema = z
+  .object({
+    nickname: z.string().trim().max(60).optional(),
+    note: z.string().trim().max(240).optional(),
+    includeInAnalysis: z.boolean().optional(),
+    selectedSuggestionIndex: z.number().int().min(0).max(4).optional(),
+  })
+  .refine((value) => Object.values(value).some((entry) => entry !== undefined), {
+    message: 'Ingen ændringer.',
+  });
+
+export const identificationRescanSchema = z.object({
+  imageId: z.string().min(1),
+  organ: z.enum(['auto', 'leaf', 'flower', 'fruit', 'bark', 'habit', 'other']).default('auto'),
 });
