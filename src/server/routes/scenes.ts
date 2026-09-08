@@ -334,7 +334,18 @@ sceneRoutes.post('/:sceneId/visualizations', async (c) => {
       }),
     });
   } catch (error) {
-    console.error('Image edit failed', error);
+    // Log the text, not the Error: the platform renders a logged Error as name plus stack and
+    // drops `message`, which is the only place the upstream status, code and detail live. Passing
+    // the object here silently threw away every bit of diagnosis the provider had assembled.
+    console.error(
+      `Image edit failed: ${
+        error instanceof ImageEditError
+          ? `[${error.code}] ${error.message}`
+          : error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : String(error)
+      }`,
+    );
     if (error instanceof ImageEditError) {
       const status = error.code === 'rejected' ? 422 : error.code === 'rate-limited' ? 429 : 502;
       const message =
