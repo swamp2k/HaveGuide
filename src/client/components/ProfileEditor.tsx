@@ -1,51 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { AreaProfile } from '../../shared/types';
-import { isProfileComplete } from '../../shared/profile';
+import { isProfileComplete, PROFILE_FIELD_LABEL, PROFILE_OPTIONS } from '../../shared/profile';
+import type { ProfileConditionKey } from '../../shared/profile';
 import { DrainIcon, DropletIcon, SoilIcon, SunIcon, WindIcon } from './icons';
 
-const OPTIONS = {
-  sun: [
-    ['full_sun', 'Fuld sol'],
-    ['part_sun', 'Halvsol'],
-    ['shade', 'Skygge'],
-  ],
-  moisture: [
-    ['dry', 'Tørt'],
-    ['normal', 'Normalt'],
-    ['moist', 'Fugtigt'],
-    ['wet', 'Vådt'],
-  ],
-  soil: [
-    ['sand', 'Sandet'],
-    ['loam', 'Muldjord'],
-    ['clay', 'Leret'],
-    ['mixed', 'Blandet'],
-    ['unknown', 'Ved ikke'],
-  ],
-  drainage: [
-    ['fast', 'Dræner hurtigt'],
-    ['normal', 'Normalt dræn'],
-    ['slow', 'Holder på vand'],
-    ['unknown', 'Ved ikke'],
-  ],
-  wind: [
-    ['sheltered', 'Læ'],
-    ['normal', 'Normalt'],
-    ['exposed', 'Vindudsat'],
-    ['unknown', 'Ved ikke'],
-  ],
-} as const;
-
-const FIELD_LABEL: Record<ProfileKey, string> = {
-  sun: 'Sol',
-  moisture: 'Fugt',
-  soil: 'Jord',
-  drainage: 'Dræn',
-  wind: 'Vind',
-};
-
-const FIELD_ICON: Record<ProfileKey, ReactNode> = {
+const FIELD_ICON: Record<ProfileConditionKey, ReactNode> = {
   sun: <SunIcon size={17} />,
   moisture: <DropletIcon size={17} />,
   soil: <SoilIcon size={17} />,
@@ -54,8 +14,6 @@ const FIELD_ICON: Record<ProfileKey, ReactNode> = {
 };
 
 const GOALS = ['Lav vedligeholdelse', 'Bestøvere', 'Farve', 'Spiseligt', 'Privatliv', 'Helårsinteresse', 'Tørketålende'];
-
-type ProfileKey = keyof typeof OPTIONS;
 
 export function ProfileEditor({ profile, onSave }: { profile: AreaProfile; onSave: (profile: AreaProfile) => Promise<void> }) {
   const [draft, setDraft] = useState(profile);
@@ -66,7 +24,7 @@ export function ProfileEditor({ profile, onSave }: { profile: AreaProfile; onSav
 
   useEffect(() => setDraft(profile), [profile]);
 
-  function setOption(key: ProfileKey, value: string) {
+  function setOption(key: ProfileConditionKey, value: string) {
     setSaved(false);
     setDraft((current) => ({ ...current, [key]: value }) as AreaProfile);
   }
@@ -93,10 +51,10 @@ export function ProfileEditor({ profile, onSave }: { profile: AreaProfile; onSav
   }
 
   const complete = isProfileComplete(draft);
-  const summary = (Object.keys(OPTIONS) as ProfileKey[]).flatMap((key) => {
+  const summary = (Object.keys(PROFILE_OPTIONS) as ProfileConditionKey[]).flatMap((key) => {
     const value = draft[key];
     if (!value) return [];
-    const label = OPTIONS[key].find(([option]) => option === value)?.[1];
+    const label = PROFILE_OPTIONS[key].find(([option]) => option === value)?.[1];
     return label ? [{ key, label }] : [];
   });
 
@@ -128,14 +86,14 @@ export function ProfileEditor({ profile, onSave }: { profile: AreaProfile; onSav
       {open && (
         <>
           <div className="condition-grid">
-            {(Object.keys(OPTIONS) as ProfileKey[]).map((key) => (
+            {(Object.keys(PROFILE_OPTIONS) as ProfileConditionKey[]).map((key) => (
               <fieldset key={key}>
                 <legend>
                   <span className="legend-icon">{FIELD_ICON[key]}</span>
-                  {FIELD_LABEL[key]}
+                  {PROFILE_FIELD_LABEL[key]}
                 </legend>
                 <div className="chip-row">
-                  {OPTIONS[key].map(([value, label]) => (
+                  {PROFILE_OPTIONS[key].map(([value, label]) => (
                     <button
                       key={value}
                       type="button"
