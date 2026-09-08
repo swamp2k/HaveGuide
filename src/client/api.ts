@@ -1,4 +1,4 @@
-import type { AreaProfile, GardenScene, PlantIdentification, SceneSummary } from '../shared/types';
+import type { AreaProfile, GardenScene, PlantIdentification, SceneSummary, SceneVisualization } from '../shared/types';
 import type { PasswordChallenge } from '../shared/auth';
 
 interface ApiErrorBody { error?: { message?: string; code?: string; details?: unknown } }
@@ -61,5 +61,12 @@ export const api = {
   deleteIdentification: (sceneId: string, identificationId: string) =>
     request<{ ok: boolean }>(`/api/scenes/${sceneId}/identifications/${identificationId}`, { method: 'DELETE' }),
   analyze: (sceneId: string, imageId: string, mode: 'overview' | 'ideas' | 'problem', question = '') => request<{ analysis: GardenScene['analyses'][number] }>(`/api/scenes/${sceneId}/analyze`, { method: 'POST', body: JSON.stringify({ imageId, mode, question }) }),
+  createVisualization: (sceneId: string, sourceImageId: string, instruction: string) =>
+    request<{ visualization: SceneVisualization | null; scene: GardenScene | null }>(
+      `/api/scenes/${sceneId}/visualizations`,
+      { method: 'POST', body: JSON.stringify({ sourceImageId, instruction }) },
+    ),
+  deleteVisualization: (sceneId: string, visualizationId: string) =>
+    request<{ ok: boolean }>(`/api/scenes/${sceneId}/visualizations/${visualizationId}`, { method: 'DELETE' }),
   deleteScene: (id: string) => request<{ ok: boolean }>(`/api/scenes/${id}`, { method: 'DELETE' }),
 };

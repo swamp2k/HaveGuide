@@ -27,7 +27,18 @@ it is the normal case, and the user must never have to match a timestamp to a ph
   the user selected. Close-up plant photos are never sent to Anthropic — only their metadata.
 - Do not pretend PlantNet is reliable on a wide garden overview. Prefer a dedicated close-up flow.
 - Do not infer soil type, pH, drainage, or moisture from a photo as if it were measured data.
-- Keep image editing provider-independent. Anthropic analysis is not image generation.
+- Keep image editing provider-independent: it sits behind `ImageEditProvider` in
+  `src/server/providers/image-edit/`. Anthropic analysis is not image generation.
+- A visualization edits the user's real photo. The prompt is built server-side and must keep
+  demanding that camera angle, lighting and fixed structures (house, terrace, fence, walls, edging,
+  paths, stones, existing trees) survive unchanged — the value is that it is recognisably *their*
+  garden, not a stock render. Only planting changes.
+- Visualizations are stored in their own table with their own R2 key and served only through
+  `/api/visualizations/:id`. Do not migrate them into `garden_scene_images_v2`: widening that
+  table's `kind` CHECK needs a rebuild, and dropping the old table with foreign keys on cascades
+  into plant cards and analyses.
+- V1 is deliberately one wish in, one image out. No mask editor, brush, region select, variant
+  batches, edit threads or before/after slider.
 
 ## Panorama
 

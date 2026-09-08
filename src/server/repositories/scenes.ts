@@ -6,6 +6,7 @@ import type {
   PlantSuggestion,
   SceneImage,
   SceneSummary,
+  SceneVisualization,
 } from '../../shared/types';
 import { EMPTY_PROFILE, isProfileComplete } from '../../shared/profile';
 import { nowIso } from '../utils/time';
@@ -458,14 +459,136 @@ export async function listAnalyses(db: D1Database, sceneId: string): Promise<AiA
   });
 }
 
+interface VisualizationRow {
+  id: string;
+  scene_id: string;
+  source_image_id: string;
+  instruction: string;
+  model: string;
+  created_at: string;
+}
+
+function visualizationFromRow(row: VisualizationRow): SceneVisualization {
+  return {
+    id: row.id,
+    sceneId: row.scene_id,
+    sourceImageId: row.source_image_id,
+    instruction: row.instruction,
+    model: row.model,
+    createdAt: row.created_at,
+    url: `/api/visualizations/${row.id}`,
+  };
+}
+
+export async function saveVisualization(
+  db: D1Database,
+  input: {
+    sceneId: string;
+    userId: string;
+    sourceImageId: string;
+    r2Key: string;
+    contentType: string;
+    sizeBytes: number;
+    instruction: string;
+    model: string;
+  },
+): Promise<string> {
+  const id = crypto.randomUUID();
+  const now = nowIso();
+  await db.batch([
+    db.prepare(
+      `INSERT INTO scene_visualizations_v2
+         (id, scene_id, user_id, source_image_id, r2_key, content_type, size_bytes, instruction, model, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      id,
+      input.sceneId,
+      input.userId,
+      input.sourceImageId,
+      input.r2Key,
+      input.contentType,
+      input.sizeBytes,
+      input.instruction,
+      input.model,
+      now,
+    ),
+    db.prepare('UPDATE garden_scenes_v2 SET updated_at = ? WHERE id = ?').bind(now, input.sceneId),
+  ]);
+  return id;
+}
+
+export async function listVisualizations(db: D1Database, sceneId: string): Promise<SceneVisualization[]> {
+  const rows = await db.prepare(
+    `SELECT id, scene_id, source_image_id, instruction, model, created_at
+     FROM scene_visualizations_v2 WHERE scene_id = ? ORDER BY created_at DESC`,
+  )
+    .bind(sceneId)
+    .all<VisualizationRow>();
+  return (rows.results ?? []).map(visualizationFromRow);
+}
+
+export async function findVisualization(
+  db: D1Database,
+  sceneId: string,
+  visualizationId: string,
+): Promise<SceneVisualization | null> {
+  const row = await db.prepare(
+    `SELECT id, scene_id, source_image_id, instruction, model, created_at
+     FROM scene_visualizations_v2 WHERE id = ? AND scene_id = ? LIMIT 1`,
+  )
+    .bind(visualizationId, sceneId)
+    .first<VisualizationRow>();
+  return row ? visualizationFromRow(row) : null;
+}
+
+/**
+ * Looks up a visualization's stored object for authenticated serving. Ownership is checked
+ * against both the row's user and the owning scene, so a stale row cannot leak an image.
+ */
+export async function findOwnedVisualizationObject(
+  db: D1Database,
+  userId: string,
+  visualizationId: string,
+): Promise<{ r2_key: string; content_type: string } | null> {
+  return db.prepare(
+    `SELECT v.r2_key, v.content_type
+     FROM scene_visualizations_v2 v
+     JOIN garden_scenes_v2 s ON s.id = v.scene_id
+     WHERE v.id = ? AND v.user_id = ? AND s.user_id = ? AND s.archived_at IS NULL LIMIT 1`,
+  )
+    .bind(visualizationId, userId, userId)
+    .first<{ r2_key: string; content_type: string }>();
+}
+
+/** Removes a visualization, returning its R2 key so the caller can clean up storage. */
+export async function deleteVisualization(
+  db: D1Database,
+  sceneId: string,
+  visualizationId: string,
+): Promise<{ r2Key: string } | null> {
+  const row = await db.prepare(
+    'SELECT r2_key FROM scene_visualizations_v2 WHERE id = ? AND scene_id = ? LIMIT 1',
+  )
+    .bind(visualizationId, sceneId)
+    .first<{ r2_key: string }>();
+  if (!row) return null;
+  const now = nowIso();
+  await db.batch([
+    db.prepare('DELETE FROM scene_visualizations_v2 WHERE id = ? AND scene_id = ?').bind(visualizationId, sceneId),
+    db.prepare('UPDATE garden_scenes_v2 SET updated_at = ? WHERE id = ?').bind(now, sceneId),
+  ]);
+  return { r2Key: row.r2_key };
+}
+
 export async function getScene(db: D1Database, userId: string, sceneId: string): Promise<GardenScene | null> {
   const scene = await ownedScene(db, userId, sceneId);
   if (!scene) return null;
-  const [profile, images, identifications, analyses] = await Promise.all([
+  const [profile, images, identifications, analyses, visualizations] = await Promise.all([
     getProfile(db, sceneId),
     listImages(db, sceneId),
     listIdentifications(db, sceneId),
     listAnalyses(db, sceneId),
+    listVisualizations(db, sceneId),
   ]);
   return {
     id: scene.id,
@@ -477,17 +600,21 @@ export async function getScene(db: D1Database, userId: string, sceneId: string):
     images,
     identifications,
     analyses,
+    visualizations,
   };
 }
 
 export async function deleteScene(db: D1Database, userId: string, sceneId: string): Promise<string[] | null> {
   const scene = await ownedScene(db, userId, sceneId);
   if (!scene) return null;
-  const keys = await db.prepare(
-    'SELECT r2_key FROM garden_scene_images_v2 WHERE scene_id = ? AND deleted_at IS NULL',
-  )
-    .bind(sceneId)
-    .all<{ r2_key: string }>();
+  const [imageKeys, visualizationKeys] = await Promise.all([
+    db.prepare('SELECT r2_key FROM garden_scene_images_v2 WHERE scene_id = ? AND deleted_at IS NULL')
+      .bind(sceneId)
+      .all<{ r2_key: string }>(),
+    db.prepare('SELECT r2_key FROM scene_visualizations_v2 WHERE scene_id = ?')
+      .bind(sceneId)
+      .all<{ r2_key: string }>(),
+  ]);
   await db.prepare('DELETE FROM garden_scenes_v2 WHERE id = ? AND user_id = ?').bind(sceneId, userId).run();
-  return (keys.results ?? []).map((row) => row.r2_key);
+  return [...(imageKeys.results ?? []), ...(visualizationKeys.results ?? [])].map((row) => row.r2_key);
 }

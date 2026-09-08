@@ -67,6 +67,17 @@ export interface AiAnalysis {
   payload: AiAnalysisPayload;
 }
 
+export interface SceneVisualization {
+  id: string;
+  sceneId: string;
+  sourceImageId: string;
+  instruction: string;
+  model: string;
+  createdAt: string;
+  /** Authenticated URL for the generated image; the R2 key is never exposed. */
+  url: string;
+}
+
 export interface GardenScene {
   id: string;
   title: string;
@@ -77,6 +88,7 @@ export interface GardenScene {
   images: SceneImage[];
   identifications: PlantIdentification[];
   analyses: AiAnalysis[];
+  visualizations: SceneVisualization[];
 }
 
 export interface SceneSummary {
